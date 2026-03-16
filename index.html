@@ -5,9 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>沖繩熱1.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet Map CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; color: #1e293b; word-break: break-word; }
+        
+        /* 地圖樣式 */
+        #map { height: 400px; width: 100%; border-radius: 1rem; z-index: 10; margin-bottom: 1.5rem; border: 4px solid white; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        
         .day-card { transition: all 0.2s ease; border-left-width: 6px; }
         .day-card:hover { transform: translateY(-2px); }
         
@@ -31,6 +37,7 @@
         .timeline-content { margin-left: 0.5rem; padding-left: 0.75rem; }
         @media (min-width: 768px) {
             .timeline-content { margin-left: 0.75rem; padding-left: 1.5rem; }
+            #map { height: 500px; }
         }
     </style>
 </head>
@@ -39,8 +46,15 @@
         <!-- Header -->
         <header class="text-center mb-6 bg-slate-800 text-white p-6 md:p-10 rounded-2xl md:rounded-3xl shadow-lg border-b-8 border-emerald-500">
             <h1 class="text-2xl md:text-5xl font-bold mb-2 tracking-tight">沖繩熱1.0</h1>
-            <p class="text-slate-400 text-sm md:text-base font-medium italic">5/23 - 5/28 | 視覺與住宿分區強化版</p>
+            <p class="text-slate-400 text-sm md:text-base font-medium italic">5/23 - 5/28 | 空間動線與互動地圖版</p>
         </header>
+
+        <!-- Interactive Map Section -->
+        <section class="mb-8">
+            <h2 class="font-bold text-slate-800 mb-3 flex items-center text-lg"><span class="mr-2">📍</span> 路線地圖預覽</h2>
+            <div id="map"></div>
+            <p class="text-xs text-slate-400 italic text-center">※ 藍色：那霸區域 | 橘色：北部區域 | 綠色：中部區域</p>
+        </section>
 
         <!-- Flight & Logistics -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -57,8 +71,8 @@
             </section>
             <section class="bg-slate-50 p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm text-xs md:text-sm text-slate-600">
                 <h2 class="font-bold text-slate-800 mb-3 flex items-center text-sm md:text-base">🚗 取還車安排</h2>
-                <p>● <strong>5/24 09:00：</strong> 那霸市區店取車。</p>
-                <p>● <strong>5/28 14:15：</strong> 機場店還車。</p>
+                <p>● <strong>5/24 09:00：</strong> 那霸市區店取車</p>
+                <p>● <strong>5/28 14:15：</strong> 機場店還車</p>
             </section>
         </div>
 
@@ -77,7 +91,6 @@
                             <span class="tag-food mt-0.5">必吃</span>
                             <a href="https://www.google.com/maps/search/?api=1&query=Torijin+Naha" target="_blank" class="font-bold text-sm md:text-base map-link">21:30 Torijin Naha (鳥神)</a>
                         </div>
-                        <p class="text-red-800 text-xs md:text-sm mt-1 font-bold">★ 串燒清單。那霸市中心，第一晚步行即可。</p>
                     </div>
                 </div>
             </div>
@@ -89,23 +102,19 @@
                     <span class="tag-stay-2">宿：北部名護</span>
                 </div>
                 <div class="timeline-content space-y-4">
-                    <p class="text-slate-500 text-xs italic"><span class="tag-drive">今日北上</span> 那霸 → 浦添 → 名護 (約 70min)</p>
-                    <p class="font-bold text-sm md:text-base">09:00 取車 -> <a href="https://www.google.com/maps/search/?api=1&query=波上宮" target="_blank" class="map-link text-blue-600">波上宮</a></p>
+                    <p class="text-slate-500 text-xs italic"><span class="tag-drive">今日北上</span> 那霸 → 浦添 → 名護</p>
+                    <p class="font-bold text-sm md:text-base"><a href="https://www.google.com/maps/search/?api=1&query=波上宮" target="_blank" class="map-link text-blue-600">波上宮</a></p>
                     <div class="flex items-start gap-2">
                         <span class="tag-food mt-0.5">必吃</span>
                         <a href="https://www.google.com/maps/search/?api=1&query=漁師食堂+那霸" target="_blank" class="font-bold text-sm md:text-base map-link">11:30 漁師食堂</a>
                     </div>
                     <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
-                        <div class="flex items-start gap-2 text-emerald-800">
+                        <div class="flex items-start gap-2">
                             <span class="tag-spot mt-0.5">購物</span>
-                            <a href="https://www.google.com/maps/search/?api=1&query=PARCO+CITY+沖繩" target="_blank" class="font-bold text-sm md:text-base map-link">PARCO CITY</a>
+                            <a href="https://www.google.com/maps/search/?api=1&query=PARCO+CITY+沖繩" target="_blank" class="font-bold map-link text-emerald-800">PARCO CITY</a>
                         </div>
-                        <p class="text-emerald-700 text-xs mt-1 font-medium">位於北上沿岸，大型採買首選。 </p>
                     </div>
-                    <div class="bg-slate-100 p-3 md:p-4 rounded-xl">
-                        <p class="text-slate-600 text-xs md:text-sm font-bold">18:30 抵達北部飯店 Check-in</p>
-                        <p class="text-slate-500 text-xs mt-1">晚餐建議在名護市區用餐。</p>
-                    </div>
+                    <div class="bg-slate-100 p-3 rounded-xl"><p class="font-bold text-xs md:text-sm">18:30 抵達北部飯店 Check-in</p></div>
                 </div>
             </div>
 
@@ -116,24 +125,19 @@
                     <span class="tag-stay-2">宿：北部名護</span>
                 </div>
                 <div class="timeline-content space-y-4">
-                    <p class="text-slate-500 text-xs italic">住北部優勢：15min 直達水族館</p>
                     <div class="flex items-start gap-2">
-                        <span class="tag-food mt-0.5 font-bold">必吃</span>
+                        <span class="tag-food mt-0.5">必吃</span>
                         <a href="https://www.google.com/maps/search/?api=1&query=Bakery+and+Cafe+Kaito+名護" target="_blank" class="font-bold text-sm md:text-base map-link">09:00 Pain de Kaito</a>
                     </div>
-                    <div class="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                        <div class="flex items-start gap-2">
-                            <span class="tag-spot mt-0.5 text-blue-700 font-bold">重點</span>
-                            <a href="https://www.google.com/maps/search/?api=1&query=美麗海水族館" target="_blank" class="font-bold text-sm md:text-base map-link text-blue-800">10:00 美麗海水族館</a>
-                        </div>
-                        <p class="text-blue-700 text-xs mt-1 font-medium text-blue-800">平日早上人潮較少。 </p>
+                    <div class="bg-blue-50 p-3 rounded-lg border border-blue-100 font-bold">
+                        <a href="https://www.google.com/maps/search/?api=1&query=美麗海水族館" target="_blank" class="map-link text-blue-800">10:00 美麗海水族館</a>
                     </div>
                     <div class="flex items-start gap-2">
                         <span class="tag-food mt-0.5">必吃</span>
-                        <a href="https://www.google.com/maps/search/?api=1&query=燒肉+もと備牧場+本部店" target="_blank" class="font-bold text-sm md:text-base map-link">14:00 燒肉 も特部牧場</a>
+                        <a href="https://www.google.com/maps/search/?api=1&query=燒肉+もと備牧場+本部店" target="_blank" class="font-bold map-link">14:00 燒肉 もとぶ牧場</a>
                     </div>
-                    <p class="font-bold text-sm md:text-base leading-relaxed">
-                        16:00 <a href="https://www.google.com/maps/search/?api=1&query=古宇利島+心形岩" target="_blank" class="map-link text-blue-600">古宇利島 (心形岩)</a> / <a href="https://www.google.com/maps/search/?api=1&query=備瀨一線天" target="_blank" class="map-link text-blue-600">一線天</a>
+                    <p class="font-bold text-sm md:text-base">
+                        16:00 <a href="https://www.google.com/maps/search/?api=1&query=古宇利島+心形岩" target="_blank" class="map-link text-blue-600">古宇利島</a> / <a href="https://www.google.com/maps/search/?api=1&query=備瀨一線天" target="_blank" class="map-link text-blue-600">備瀨一線天</a>
                     </p>
                 </div>
             </div>
@@ -145,29 +149,26 @@
                     <span class="tag-stay-3">宿：那霸市區</span>
                 </div>
                 <div class="timeline-content space-y-4">
-                    <p class="text-slate-500 text-xs italic"><span class="tag-drive">回程那霸</span> 名護 → 北谷 (50min) → 那霸 (40min)</p>
                     <div class="flex items-start gap-2">
                         <span class="tag-food mt-0.5 font-bold">必吃</span>
-                        <a href="https://www.google.com/maps/search/?api=1&query=Good+Day+Coffee+Okinawa" target="_blank" class="font-bold text-sm md:text-base map-link">10:00 Good Day Coffee</a>
+                        <a href="https://www.google.com/maps/search/?api=1&query=Good+Day+Coffee+Okinawa" target="_blank" class="font-bold map-link">10:00 Good Day Coffee</a>
                     </div>
                     <p class="font-bold text-sm md:text-base leading-relaxed">
-                        <a href="https://www.google.com/maps/search/?api=1&query=北谷+美國村" target="_blank" class="map-link text-blue-600">美國村深度散策</a><br>
-                        <span class="text-slate-500 text-xs font-normal">逛 UFO Burger、古著店。 </span>
+                        <a href="https://www.google.com/maps/search/?api=1&query=北谷+美國村" target="_blank" class="map-link text-blue-600">美國村深度散策</a> (UFO Burger / 古著)
                     </p>
                     <div class="flex items-start gap-2">
                         <span class="tag-food mt-0.5 font-bold">必吃</span>
-                        <a href="https://www.google.com/maps/search/?api=1&query=WaGyu+Café+Kapuka" target="_blank" class="font-bold text-sm md:text-base map-link">15:30 WaGyu Café Kapuka</a>
+                        <a href="https://www.google.com/maps/search/?api=1&query=WaGyu+Café+Kapuka" target="_blank" class="font-bold map-link">15:30 WaGyu Café Kapuka</a>
                     </div>
                     <div class="flex items-start gap-2">
                         <span class="tag-food mt-0.5 font-bold">必吃</span>
-                        <a href="https://www.google.com/maps/search/?api=1&query=浜屋沖繩麵" target="_blank" class="font-bold text-sm md:text-base map-link">18:00 浜屋沖繩麵</a>
+                        <a href="https://www.google.com/maps/search/?api=1&query=浜屋沖繩麵" target="_blank" class="font-bold map-link">18:00 浜屋沖繩麵</a>
                     </div>
-                    <div class="bg-slate-900 text-white p-3 md:p-4 rounded-xl shadow-lg mt-4 border-l-4 border-red-500">
+                    <div class="bg-slate-900 text-white p-3 md:p-4 rounded-xl shadow-lg border-l-4 border-red-500">
                         <div class="flex items-start gap-2 text-white">
                             <span class="tag-food mt-0.5 text-white bg-red-600">必吃</span>
-                            <a href="https://www.google.com/maps/search/?api=1&query=燒肉神社+宮崎牛專賣" target="_blank" class="font-bold text-sm md:text-base map-link text-white">21:00 燒肉神社 / 宮崎牛</a>
+                            <a href="https://www.google.com/maps/search/?api=1&query=燒肉神社+宮崎牛專賣" target="_blank" class="font-bold map-link text-white">21:00 燒肉神社 / 宮崎牛</a>
                         </div>
-                        <p class="text-slate-400 text-xs md:text-sm mt-1 font-bold">★ 回到那霸後 Check-in，步行或短程計程車前往享用宮崎牛。</p>
                     </div>
                 </div>
             </div>
@@ -179,16 +180,14 @@
                     <span class="tag-stay-3">宿：那霸市區</span>
                 </div>
                 <div class="timeline-content space-y-4">
-                    <p class="text-slate-500 text-xs italic"><span class="tag-drive">南部巡禮</span> 那霸 → 沖繩世界 (30min)</p>
                     <p class="font-bold text-sm md:text-base"><a href="https://www.google.com/maps/search/?api=1&query=沖繩世界+玉泉洞" target="_blank" class="map-link text-blue-600">10:30 沖繩世界 (玉泉洞)</a></p>
-                    <p class="font-bold text-sm md:text-base leading-relaxed">
-                        14:00 <a href="https://www.google.com/maps/search/?api=1&query=瀨長島+Umikaji+Terrace" target="_blank" class="map-link text-blue-600 font-bold">瀨長島</a> / <a href="https://www.google.com/maps/search/?api=1&query=Chura+Ichigo+瀨長島" target="_blank" class="map-link">Chura Ichigo</a><br>
-                        -> <a href="https://www.google.com/maps/search/?api=1&query=ASHIBINAA+Outlet" target="_blank" class="map-link text-blue-600 font-bold underline">16:30 ASHIBINAA Outlet</a>
+                    <p class="font-bold text-sm md:text-base">
+                        14:00 <a href="https://www.google.com/maps/search/?api=1&query=瀨長島+Umikaji+Terrace" target="_blank" class="map-link font-bold text-blue-600">瀨長島</a> / <a href="https://www.google.com/maps/search/?api=1&query=ASHIBINAA+Outlet" target="_blank" class="map-link font-bold text-blue-600 underline">Outlet</a>
                     </p>
-                    <div class="bg-slate-800 text-white p-3 md:p-4 rounded-xl shadow-md">
+                    <div class="bg-slate-800 text-white p-3 md:p-4 rounded-xl">
                         <div class="flex items-start gap-2 text-white">
                             <span class="tag-food mt-0.5 text-white">必吃</span>
-                            <a href="https://www.google.com/maps/search/?api=1&query=焼肉オリオン+那覇のうれんプラザ店" target="_blank" class="font-bold text-sm md:text-base map-link text-white">19:30 焼肉オリオン (那霸)</a>
+                            <a href="https://www.google.com/maps/search/?api=1&query=焼肉オリオン+那覇のうれんプラザ店" target="_blank" class="font-bold map-link text-white">19:30 焼肉オリオン</a>
                         </div>
                     </div>
                 </div>
@@ -201,12 +200,12 @@
                     <span class="bg-red-50 px-2 py-1 rounded text-[10px] md:text-xs font-bold text-red-500">同步賦歸</span>
                 </div>
                 <div class="timeline-content space-y-4">
-                    <p class="font-bold text-sm md:text-base"><a href="https://www.google.com/maps/search/?api=1&query=首里城" target="_blank" class="map-link text-blue-600">09:30 首里城</a> (看重建)</p>
+                    <p class="font-bold text-sm md:text-base"><a href="https://www.google.com/maps/search/?api=1&query=首里城" target="_blank" class="map-link text-blue-600">09:30 首里城</a></p>
                     <p class="font-bold text-sm md:text-base"><a href="https://www.google.com/maps/search/?api=1&query=第一牧志公設市場" target="_blank" class="map-link text-blue-600">11:30 牧志市場</a> / <a href="https://www.google.com/maps/search/?api=1&query=LITOR+那霸" target="_blank" class="map-link text-blue-600 font-bold">LITOR</a></p>
                     <div class="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
                         <div class="flex items-start gap-2">
                             <span class="tag-food mt-0.5 font-bold">必吃</span>
-                            <a href="https://www.google.com/maps/search/?api=1&query=通堂拉麵+小祿本店" target="_blank" class="font-bold text-sm md:text-base map-link">13:00 通堂拉麵 (小祿)</a>
+                            <a href="https://www.google.com/maps/search/?api=1&query=通堂拉麵+小祿本店" target="_blank" class="font-bold map-link">13:00 通堂拉麵 (小祿)</a>
                         </div>
                         <p class="text-blue-800 text-[10px] md:text-xs mt-1 font-bold">14:15 還車 -> 16:45 飛機起飛</p>
                     </div>
@@ -214,15 +213,67 @@
             </div>
         </div>
 
-        <!-- Footer -->
         <footer class="mt-8 text-center text-slate-400 pb-16 text-[10px] md:text-xs border-t border-slate-200 pt-6">
-            <p>© 2025 沖繩熱1.0 | 5/23(六)-5/28(四) | 視覺優化版</p>
-            <p class="mt-1 font-medium italic underline">
-                <span class="text-blue-500">D1 那霸</span> | 
-                <span class="text-amber-500">D2-3 北部</span> | 
-                <span class="text-emerald-500">D4-5 那霸</span>
-            </p>
+            <p>© 2025 沖繩熱1.0 | 住宿分組：<span class="text-blue-500">那霸</span> / <span class="text-amber-500">北部</span> / <span class="text-emerald-500">那霸</span></p>
         </footer>
     </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        window.onload = function() {
+            // 初始化地圖中心點 (沖繩中部)
+            const map = L.map('map').setView([26.4, 127.8], 10);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+
+            // 定點資料
+            const locations = [
+                // 那霸區 (藍色)
+                { name: "那霸機場", pos: [26.2064, 127.6465], color: "blue" },
+                { name: "鳥神 Torijin", pos: [26.216, 127.684], color: "blue" },
+                { name: "波上宮", pos: [26.220, 127.671], color: "blue" },
+                { name: "漁師食堂", pos: [26.223, 127.691], color: "blue" },
+                { name: "燒肉神社", pos: [26.215, 127.685], color: "blue" },
+                { name: "首里城", pos: [26.217, 127.719], color: "blue" },
+                { name: "牧志市場", pos: [26.214, 127.688], color: "blue" },
+                { name: "通堂拉麵", pos: [26.196, 127.666], color: "blue" },
+                { name: "燒肉 Orion", pos: [26.213, 127.693], color: "blue" },
+                
+                // 北部區 (橘色)
+                { name: "Pain de Kaito", pos: [26.594, 127.971], color: "orange" },
+                { name: "美麗海水族館", pos: [26.694, 127.877], color: "orange" },
+                { name: "もとぶ牧場", pos: [26.666, 127.890], color: "orange" },
+                { name: "古宇利島", pos: [26.711, 128.020], color: "orange" },
+                { name: "備瀨一線天", pos: [26.702, 127.883], color: "orange" },
+
+                // 中南部 (綠色)
+                { name: "PARCO CITY", pos: [26.262, 127.696], color: "green" },
+                { name: "Good Day Coffee", pos: [26.330, 127.755], color: "green" },
+                { name: "美國村", pos: [26.316, 127.757], color: "green" },
+                { name: "Cafe Kapuka", pos: [26.318, 127.754], color: "green" },
+                { name: "浜屋沖繩麵", pos: [26.329, 127.749], color: "green" },
+                { name: "沖繩世界", pos: [26.139, 127.750], color: "green" },
+                { name: "瀨長島", pos: [26.175, 127.646], color: "green" },
+                { name: "Outlet", pos: [26.158, 127.659], color: "green" }
+            ];
+
+            // 標記樣式
+            const icons = {
+                blue: new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] }),
+                orange: new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] }),
+                green: new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] })
+            };
+
+            // 批次加入標記
+            locations.forEach(loc => {
+                L.marker(loc.pos, { icon: icons[loc.color] })
+                    .addTo(map)
+                    .bindPopup(`<b>${loc.name}</b><br><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.name)}" target="_blank" style="color:blue">開啟導航</a>`);
+            });
+        }
+    </script>
 </body>
 </html>
