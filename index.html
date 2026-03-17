@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
@@ -17,31 +17,42 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <style>
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         .leaflet-div-icon { background: transparent; border: none; }
         .leaflet-popup-content-wrapper { border-radius: 16px; padding: 0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
         .leaflet-popup-content { margin: 8px; }
-        .leaflet-container { font-family: inherit; z-index: 1; width: 100%; height: 100%; }
-        #root { height: 100vh; }
+        
+        /* 核心修正：地圖容器必須有明確的高度設定，避免 GitHub Pages 渲染問題 */
+        .map-wrapper { position: relative; width: 100%; height: 100%; flex: 1; background: #f8fafc; overflow: hidden; }
+        #map-container { width: 100%; height: 100%; min-height: 300px; }
+        #root { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
         /* 防止行動端點擊閃爍 */
         * { -webkit-tap-highlight-color: transparent; }
+
+        /* 側邊欄與地圖比例調整 */
+        @media (min-width: 768px) {
+            .main-container { display: flex; flex-direction: row; height: calc(100vh - 64px); }
+            .sidebar { width: 384px; height: 100%; }
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
+        const { useState, useEffect, useRef } = React;
 
-        // --- 安全取得環境變數 ---
+        // --- 安全取得環境變數 (GitHub Pages 部署時，建議將變數直接填入下方) ---
         const getFirebaseConfig = () => {
             try {
-                if (typeof __firebase_config !== 'undefined') {
+                if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                     return JSON.parse(__firebase_config);
                 }
             } catch (e) {
-                console.warn("未偵測到 Firebase 設定");
+                console.warn("未偵測到環境變數，請確認 Firebase 設定是否正確。");
             }
             return null;
         };
@@ -50,31 +61,17 @@
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'okinawa-trip-2025';
         const MEMBERS = ["志展", "盧志", "大維", "禹康", "懿軒"];
 
-        // --- 完整行程初始資料 ---
+        // --- 完整行程初始資料 (種子資料) ---
         const INITIAL_ITINERARY = [
-            { day: 1, time: '19:45', content: '全員抵達那霸機場、飯店 Check-in', location: '那霸機場', url: 'https://www.google.com/maps/search/?api=1&query=那霸機場', lat: 26.2064, lng: 127.6465, member: '志展', type: 'main' },
-            { day: 1, time: '21:30', content: '晚餐：Torijin Naha (鳥神串燒)', location: 'Torijin Naha', url: 'https://www.google.com/maps/search/?api=1&query=那覇+焼き鳥+鳥神', lat: 26.2155, lng: 127.6792, member: '盧志', type: 'main' },
-            { day: 2, time: '09:00', content: '市區取車 → 波上宮', location: '波上宮', url: 'https://www.google.com/maps/search/?api=1&query=波上宮', lat: 26.2207, lng: 127.6711, member: '大維', type: 'main' },
-            { day: 2, time: '11:30', content: '午餐：漁師食堂 (海鮮)', location: '漁師食堂', url: 'https://www.google.com/maps/search/?api=1&query=漁師食堂+大木海產物', lat: 26.3456, lng: 127.7890, member: '禹康', type: 'main' },
-            { day: 2, time: '14:00', content: '購物：PARCO CITY (北上順路採買)', location: 'PARCO CITY', url: 'https://www.google.com/maps/search/?api=1&query=浦添西海岸+PARCO+CITY', lat: 26.2625, lng: 127.6975, member: '懿軒', type: 'main' },
-            { day: 2, time: '18:30', content: '抵達北部飯店入住、名護市區晚餐', location: '名護市區', url: 'https://www.google.com/maps/search/?api=1&query=名護市', lat: 26.5915, lng: 127.9775, member: '志展', type: 'main' },
-            { day: 3, time: '09:00', content: '早餐：Pain de Kaito (名護名店)', location: 'Pain de Kaito', url: 'https://www.google.com/maps/search/?api=1&query=Pain+de+Kaito+名護', lat: 26.5966, lng: 127.9723, member: '盧志', type: 'main' },
-            { day: 3, time: '10:00', content: '重點：美麗海水族館', location: '美麗海水族館', url: 'https://www.google.com/maps/search/?api=1&query=沖縄美ら海水族館', lat: 26.6944, lng: 127.8779, member: '大維', type: 'main' },
-            { day: 3, time: '14:00', content: '午餐：燒肉 もとぶ牧場', location: '燒肉 も特ぶ牧場', url: 'https://www.google.com/maps/search/?api=1&query=焼肉もとぶ牧場', lat: 26.6644, lng: 127.8970, member: '禹康', type: 'main' },
-            { day: 3, time: '16:00', content: '景點：古宇利島 (心形岩) / 備瀨一線天', location: '古宇利島', url: 'https://www.google.com/maps/search/?api=1&query=古宇利島+心形岩', lat: 26.7118, lng: 128.0205, member: '懿軒', type: 'main' },
-            { day: 4, time: '10:00', content: '早午餐：Good Day Coffee (北谷)', location: 'Good Day Coffee', url: 'https://www.google.com/maps/search/?api=1&query=Good+Day+Coffee+沖縄', lat: 26.3283, lng: 127.7533, member: '志展', type: 'main' },
-            { day: 4, time: '12:00', content: '散策：美國村深度漫遊', location: '美國村', url: 'https://www.google.com/maps/search/?api=1&query=北谷美浜アメリカンビレッジ', lat: 26.3163, lng: 127.7576, member: '盧志', type: 'main' },
-            { day: 4, time: '15:30', content: '下午茶：WaGyu Café Kapuka', location: 'WaGyu Café Kapuka', url: 'https://www.google.com/maps/search/?api=1&query=WaGyu+Café+Kapuka', lat: 26.3163, lng: 127.7576, member: '大維', type: 'main' },
-            { day: 4, time: '18:00', content: '晚餐：浜屋沖繩麵', location: '浜屋沖繩麵', url: 'https://www.google.com/maps/search/?api=1&query=浜屋そば', lat: 26.3283, lng: 127.7533, member: '禹康', type: 'main' },
-            { day: 4, time: '21:00', content: '宵夜：燒肉神社 (那霸店)', location: '燒肉神社', url: 'https://www.google.com/maps/search/?api=1&query=燒肉神社+那霸', lat: 26.2155, lng: 127.6792, member: '懿軒', type: 'main' },
-            { day: 5, time: '10:30', content: '景點：沖繩世界 (玉泉洞)', location: '沖繩世界', url: 'https://www.google.com/maps/search/?api=1&query=おきなわワールド', lat: 26.1397, lng: 127.7503, member: '志展', type: 'main' },
-            { day: 5, time: '14:00', content: '景點：瀨長島散策 / Chura Ichigo 冰店', location: '瀨長島', url: 'https://www.google.com/maps/search/?api=1&query=瀨長島+Umikaji+Terrace', lat: 26.1745, lng: 127.6460, member: '盧志', type: 'main' },
-            { day: 5, time: '16:30', content: '購物：ASHIBINAA Outlet 最終衝刺', location: 'ASHIBINAA Outlet', url: 'https://www.google.com/maps/search/?api=1&query=ASHIBINAA+Outlet', lat: 26.1585, lng: 127.6575, member: '大維', type: 'main' },
-            { day: 5, time: '19:30', content: '晚餐：焼肉オリオン (最後一晚慶祝)', location: '焼肉オリオン', url: 'https://www.google.com/maps/search/?api=1&query=焼肉オリオン+那霸', lat: 26.2124, lng: 127.6809, member: '禹康', type: 'main' },
-            { day: 6, time: '09:30', content: '景點：首里城參觀', location: '首里城', url: 'https://www.google.com/maps/search/?api=1&query=首里城', lat: 26.2170, lng: 127.7194, member: '懿軒', type: 'main' },
-            { day: 6, time: '11:30', content: '景點：第一牧志公設市場', location: '第一牧志公設市場', url: 'https://www.google.com/maps/search/?api=1&query=第一牧志公設市場', lat: 26.2140, lng: 127.6880, member: '志展', type: 'main' },
-            { day: 6, time: '13:00', content: '最終餐：通堂拉麵 (小祿本店)', location: '通堂拉麵', url: 'https://www.google.com/maps/search/?api=1&query=琉球新麺+通堂+小禄本店', lat: 26.1917, lng: 127.6664, member: '盧志', type: 'main' },
-            { day: 6, time: '14:15', content: '機場店還車 → 16:45 飛機起飛', location: '那霸機場', url: 'https://www.google.com/maps/search/?api=1&query=那霸機場', lat: 26.2064, lng: 127.6465, member: '大維', type: 'main' },
+            { id: 'seed_1', day: 1, time: '19:45', content: '全員抵達那霸機場、飯店 Check-in', location: '那霸機場', url: 'https://www.google.com/maps/search/?api=1&query=那霸機場', lat: 26.2064, lng: 127.6465, member: '志展', type: 'main' },
+            { id: 'seed_2', day: 1, time: '21:30', content: '晚餐：Torijin Naha (鳥神串燒)', location: 'Torijin Naha', url: 'https://www.google.com/maps/search/?api=1&query=那覇+焼き鳥+鳥神', lat: 26.2155, lng: 127.6792, member: '盧志', type: 'main' },
+            { id: 'seed_3', day: 2, time: '09:00', content: '市區取車 → 波上宮', location: '波上宮', url: 'https://www.google.com/maps/search/?api=1&query=波上宮', lat: 26.2207, lng: 127.6711, member: '大維', type: 'main' },
+            { id: 'seed_4', day: 2, time: '11:30', content: '午餐：漁師食堂 (海鮮)', location: '漁師食堂', url: 'https://www.google.com/maps/search/?api=1&query=漁師食堂+大木海產物', lat: 26.3456, lng: 127.7890, member: '禹康', type: 'main' },
+            { id: 'seed_5', day: 2, time: '14:00', content: '購物：PARCO CITY (北上順路採買)', location: 'PARCO CITY', url: 'https://www.google.com/maps/search/?api=1&query=浦添西海岸+PARCO+CITY', lat: 26.2625, lng: 127.6975, member: '懿軒', type: 'main' },
+            { id: 'seed_6', day: 3, time: '10:00', content: '重點：美麗海水族館', location: '美麗海水族館', url: 'https://www.google.com/maps/search/?api=1&query=沖縄美ら海水族館', lat: 26.6944, lng: 127.8779, member: '大維', type: 'main' },
+            { id: 'seed_7', day: 4, time: '12:00', content: '散策：美國村深度漫遊', location: '美國村', url: 'https://www.google.com/maps/search/?api=1&query=北谷美浜アメリカンビレッジ', lat: 26.3163, lng: 127.7576, member: '盧志', type: 'main' },
+            { id: 'seed_8', day: 5, time: '10:30', content: '景點：沖繩世界 (玉泉洞)', location: '沖繩世界', url: 'https://www.google.com/maps/search/?api=1&query=おきなわワールド', lat: 26.1397, lng: 127.7503, member: '志展', type: 'main' },
+            { id: 'seed_9', day: 6, time: '09:30', content: '景點：首里城參觀', location: '首里城', url: 'https://www.google.com/maps/search/?api=1&query=首里城', lat: 26.2170, lng: 127.7194, member: '懿軒', type: 'main' }
         ];
 
         const Icon = ({ name, className = "w-4 h-4" }) => {
@@ -86,7 +83,7 @@
 
         const App = () => {
             const [user, setUser] = useState(null);
-            const [itinerary, setItinerary] = useState(INITIAL_ITINERARY);
+            const [itinerary, setItinerary] = useState([]);
             const [loading, setLoading] = useState(true);
             const [activeDay, setActiveDay] = useState(1);
             const [isModalOpen, setIsModalOpen] = useState(false);
@@ -101,7 +98,7 @@
             const markersRef = useRef([]);
             const leafletMap = useRef(null);
 
-            // --- 初始化 Firebase 並處理身份驗證 ---
+            // --- 1. Firebase 初始化與驗證 (規則 3) ---
             useEffect(() => {
                 if (!firebaseConfig) {
                     setLoading(false);
@@ -118,9 +115,9 @@
                                 setUser(u);
                             } else {
                                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                                    auth.signInWithCustomToken(__initial_auth_token).catch(e => console.error("Token signin error", e));
+                                    auth.signInWithCustomToken(__initial_auth_token).catch(() => auth.signInAnonymously());
                                 } else {
-                                    auth.signInAnonymously().catch(e => console.error("Anon signin error", e));
+                                    auth.signInAnonymously();
                                 }
                             }
                         });
@@ -136,12 +133,14 @@
                 setupFirebase();
             }, []);
 
-            // --- 獲取 Firestore 資料 ---
+            // --- 2. Firestore 資料同步 (規則 1 & 2) ---
             useEffect(() => {
-                if (isLocalMode || !user) {
-                    if (isLocalMode) setLoading(false);
+                if (isLocalMode) {
+                    setItinerary(INITIAL_ITINERARY);
+                    setLoading(false);
                     return;
                 }
+                if (!user) return;
 
                 const db = firebase.firestore();
                 const itineraryCol = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary');
@@ -155,68 +154,75 @@
                         });
                         setItinerary(sorted);
                     } else {
+                        // 初始化種子資料
                         INITIAL_ITINERARY.forEach(item => itineraryCol.add(item));
                     }
                     setLoading(false);
                 }, (err) => {
-                    console.error("Firestore Listener Error:", err);
+                    console.error("Firestore Sync Error:", err);
                     setLoading(false);
                 });
 
                 return () => unsubscribeData();
             }, [user, isLocalMode]);
 
-            // --- 地圖初始化與標記更新 (核心修正：加入 invalidateSize) ---
+            // --- 3. 地圖核心邏輯 (解決白色圖台問題) ---
             useEffect(() => {
-                const timer = setTimeout(() => {
-                    if (!leafletMap.current && mapRef.current) {
-                        leafletMap.current = L.map(mapRef.current).setView([26.4, 127.8], 9);
-                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            maxZoom: 19,
-                            attribution: '© OpenStreetMap contributors'
-                        }).addTo(leafletMap.current);
-                    }
+                // 初始化地圖
+                if (!leafletMap.current && mapRef.current) {
+                    leafletMap.current = L.map(mapRef.current, {
+                        zoomControl: true,
+                        scrollWheelZoom: true
+                    }).setView([26.4, 127.8], 9);
                     
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '© OpenStreetMap'
+                    }).addTo(leafletMap.current);
+                }
+
+                // 修正圖台尺寸與更新標記
+                const updateMapDisplay = () => {
                     if (leafletMap.current) {
+                        // 這是修復白色區塊的關鍵：強制地圖重新計算渲染邊界
                         leafletMap.current.invalidateSize();
-                        updateMarkers();
+                        
+                        // 清除舊標記
+                        markersRef.current.forEach(m => m.remove());
+                        markersRef.current = [];
+
+                        // 過濾出目前天數或全部的標記 (此處顯示所有景點)
+                        itinerary.forEach(item => {
+                            if (item.lat && item.lng) {
+                                const color = item.type === 'backup' ? '#f59e0b' : '#3b82f6';
+                                const html = `<div style="background-color: ${color}; width: 14px; height: 14px; border: 2.5px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.4);"></div>`;
+                                const icon = L.divIcon({ html, className: '', iconSize: [14, 14], iconAnchor: [7, 7] });
+
+                                const marker = L.marker([item.lat, item.lng], { icon })
+                                    .addTo(leafletMap.current)
+                                    .bindPopup(`
+                                        <div class="p-2 min-w-[160px]">
+                                            <div class="flex items-center gap-1 mb-1">
+                                                <span class="text-[10px] px-2 py-0.5 rounded ${item.type === 'backup' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'} font-bold">
+                                                    ${item.type === 'backup' ? '備選' : '主要'}
+                                                </span>
+                                                <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium">${item.member}</span>
+                                            </div>
+                                            <h3 class="font-bold text-sm text-slate-800">${item.location}</h3>
+                                            <p class="text-xs text-gray-500 mb-2 leading-tight">${item.content}</p>
+                                            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="text-xs bg-blue-600 text-white px-2 py-2 rounded-lg block text-center font-bold">開啟導航頁面</a>
+                                        </div>
+                                    `, { closeButton: false });
+                                markersRef.current.push(marker);
+                            }
+                        });
                     }
-                }, 100); // 延遲 100 毫秒確保佈局完成
-                
+                };
+
+                // 使用 requestAnimationFrame 確保 DOM 已經被瀏覽器繪製
+                const timer = setTimeout(updateMapDisplay, 300);
                 return () => clearTimeout(timer);
-            }, [itinerary]);
-
-            const updateMarkers = () => {
-                if (!leafletMap.current) return;
-                
-                markersRef.current.forEach(m => m.remove());
-                markersRef.current = [];
-
-                itinerary.forEach(item => {
-                    if (item.lat && item.lng) {
-                        const color = item.type === 'backup' ? '#f59e0b' : '#3b82f6';
-                        const html = `<div style="background-color: ${color}; width: 14px; height: 14px; border: 2.5px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.4);"></div>`;
-                        const icon = L.divIcon({ html, className: '', iconSize: [14, 14], iconAnchor: [7, 7] });
-
-                        const marker = L.marker([item.lat, item.lng], { icon })
-                            .addTo(leafletMap.current)
-                            .bindPopup(`
-                                <div class="p-2 min-w-[160px]">
-                                    <div class="flex items-center gap-1 mb-1">
-                                        <span class="text-[10px] px-2 py-0.5 rounded ${item.type === 'backup' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'} font-bold">
-                                            ${item.type === 'backup' ? '備選' : '主要'}
-                                        </span>
-                                        <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium">${item.member}</span>
-                                    </div>
-                                    <h3 class="font-bold text-sm text-slate-800">${item.location}</h3>
-                                    <p class="text-xs text-gray-500 mb-2 leading-tight">${item.content}</p>
-                                    <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="text-xs bg-blue-600 text-white px-2 py-2 rounded-lg block text-center font-bold shadow-sm hover:bg-blue-700 transition-colors">前往商家頁面</a>
-                                </div>
-                            `, { closeButton: false });
-                        markersRef.current.push(marker);
-                    }
-                });
-            };
+            }, [itinerary, activeDay]); // 天數或資料改變時觸發
 
             const handleUrlBlur = (e) => {
                 const url = e.target.value;
@@ -271,169 +277,146 @@
                 <div className="flex h-screen items-center justify-center bg-blue-50">
                     <div className="flex flex-col items-center gap-4">
                         <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
-                        <p className="text-blue-600 font-bold animate-pulse">正在整理沖繩行程...</p>
+                        <p className="text-blue-600 font-bold animate-pulse">正在與 Firebase 同步行程...</p>
                     </div>
                 </div>
             );
 
             return (
-                <div className="flex flex-col h-full bg-gray-50 overflow-hidden font-sans">
+                <div id="root">
                     {/* Header */}
-                    <header className="bg-slate-900 text-white p-4 shadow-xl flex-shrink-0 flex justify-between items-center z-20">
+                    <header className="bg-slate-900 text-white p-4 shadow-xl flex-shrink-0 flex justify-between items-center z-20 h-16">
                         <div className="flex items-center gap-3">
-                            <div className="bg-blue-600 p-2.5 rounded-xl shadow-inner"><Icon name="map" className="w-6 h-6" /></div>
+                            <div className="bg-blue-600 p-2 rounded-lg shadow-inner"><Icon name="map" className="w-5 h-5" /></div>
                             <div>
-                                <h1 className="text-xl font-black tracking-tight">沖繩 6 日自駕之旅</h1>
-                                <div className="flex items-center gap-2">
-                                    <span className={`w-2 h-2 rounded-full ${isLocalMode ? 'bg-amber-400' : 'bg-green-400'}`}></span>
-                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">
-                                        {isLocalMode ? 'Offline Mode' : 'Cloud Sync Active'}
-                                    </p>
-                                </div>
+                                <h1 className="text-lg font-black tracking-tight leading-none">沖繩旅遊同步地圖</h1>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                                    {isLocalMode ? 'Offline Mode' : 'Real-time Sync Active'}
+                                </p>
                             </div>
                         </div>
-                        <button onClick={() => { setEditingItem(null); setIsModalOpen(true); }} className="bg-blue-600 hover:bg-blue-500 px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 shadow-lg active:scale-90 transition-all">
-                            <Icon name="plus" /> 新增地點
+                        <button onClick={() => { setEditingItem(null); setIsModalOpen(true); }} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2 shadow-lg active:scale-95 transition-all">
+                            <Icon name="plus" /> 新增
                         </button>
                     </header>
 
-                    <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-                        {/* 側邊清單 */}
-                        <div className="w-full md:w-96 flex flex-col border-r bg-white overflow-hidden shadow-2xl z-10">
+                    <div className="main-container flex-1 overflow-hidden">
+                        {/* 側邊欄 */}
+                        <div className="sidebar flex flex-col border-r bg-white overflow-hidden shadow-2xl z-10 flex-shrink-0">
                             <div className="flex overflow-x-auto p-4 bg-slate-50 gap-2 border-b flex-shrink-0 scrollbar-hide">
                                 {[1,2,3,4,5,6].map(d => (
                                     <button 
                                         key={d} 
                                         onClick={() => setActiveDay(d)} 
-                                        className={`flex-shrink-0 w-14 h-12 rounded-2xl font-black text-sm transition-all shadow-sm ${
-                                            activeDay === d ? 'bg-slate-900 text-white scale-105 shadow-md' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'
+                                        className={`flex-shrink-0 w-12 h-10 rounded-xl font-black text-sm transition-all ${
+                                            activeDay === d ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'
                                         }`}
                                     >
                                         D{d}
                                     </button>
                                 ))}
                             </div>
-                            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
                                 {itinerary.filter(i => i.day === activeDay).map((item) => (
-                                    <div key={item.id || item.content} className={`group relative bg-white border-2 rounded-3xl p-5 shadow-sm border-l-[6px] transition-all hover:shadow-xl hover:-translate-y-1 ${item.type === 'backup' ? 'border-amber-400/30 border-l-amber-400' : 'border-blue-500/10 border-l-blue-500'}`}>
-                                        <div className="flex justify-between items-start mb-3">
+                                    <div key={item.id} className={`group relative bg-white border-2 rounded-2xl p-4 shadow-sm border-l-[6px] transition-all hover:shadow-md ${item.type === 'backup' ? 'border-amber-400/30 border-l-amber-400' : 'border-blue-500/10 border-l-blue-500'}`}>
+                                        <div className="flex justify-between items-start mb-2">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-lg flex items-center gap-1.5"><Icon name="clock" className="w-3.5 h-3.5" /> {item.time}</span>
-                                                <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider ${item.type === 'backup' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                <span className="text-xs font-black text-slate-400 flex items-center gap-1"><Icon name="clock" className="w-3 h-3" /> {item.time}</span>
+                                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-black ${item.type === 'backup' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
                                                     {item.type === 'backup' ? '備選' : '主要'}
                                                 </span>
                                             </div>
-                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                <button onClick={() => { setEditingItem(item); setFormData(item); setIsModalOpen(true); }} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400"><Icon name="edit-3" className="w-4 h-4" /></button>
+                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => { setEditingItem(item); setFormData(item); setIsModalOpen(true); }} className="p-1 hover:bg-slate-100 rounded text-slate-400"><Icon name="edit-3" className="w-3.5 h-3.5" /></button>
                                                 <button onClick={async () => { if(confirm('確定要刪除嗎？')) {
                                                     if (isLocalMode) setItinerary(prev => prev.filter(i => i.id !== item.id));
                                                     else await firebase.firestore().collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary').doc(item.id).delete();
-                                                }}} className="p-2 hover:bg-red-50 rounded-xl text-red-300"><Icon name="trash-2" className="w-4 h-4" /></button>
+                                                }}} className="p-1 hover:bg-red-50 rounded text-red-300"><Icon name="trash-2" className="w-3.5 h-3.5" /></button>
                                             </div>
                                         </div>
-                                        <h3 className="font-bold text-lg mb-3 text-slate-800 leading-tight">{item.content}</h3>
-                                        <div className="flex flex-wrap gap-2.5 items-center">
-                                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
-                                                <Icon name="user" className="w-3.5 h-3.5" /> {item.member}
+                                        <h3 className="font-bold text-sm mb-3 text-slate-800 leading-tight">{item.content}</h3>
+                                        <div className="flex flex-wrap gap-2 items-center">
+                                            <div className="flex items-center gap-1 text-[10px] text-slate-500 bg-slate-50 px-2 py-1 rounded-md">
+                                                <Icon name="user" className="w-3 h-3" /> {item.member}
                                             </div>
-                                            <button onClick={() => focusOn(item.lat, item.lng)} className="text-xs flex items-center gap-1.5 text-blue-600 font-black hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-xl transition-colors">
-                                                <Icon name="map-pin" className="w-3.5 h-3.5" /> {item.location}
+                                            <button onClick={() => focusOn(item.lat, item.lng)} className="text-[10px] flex items-center gap-1 text-blue-600 font-black hover:text-blue-800 bg-blue-50 px-2 py-1 rounded-md transition-colors">
+                                                <Icon name="map-pin" className="w-3 h-3" /> {item.location}
                                             </button>
-                                            {item.url && (
-                                                <a href={item.url} target="_blank" rel="noopener noreferrer" className="p-2 bg-slate-100 text-slate-400 hover:bg-blue-600 hover:text-white rounded-xl transition-all shadow-sm">
-                                                    <Icon name="external-link" className="w-4 h-4" />
-                                                </a>
-                                            )}
                                         </div>
                                     </div>
                                 ))}
-                                {itinerary.filter(i => i.day === activeDay).length === 0 && (
-                                    <div className="text-center py-20">
-                                        <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-slate-200">
-                                            <Icon name="calendar" className="w-8 h-8 text-slate-200" />
-                                        </div>
-                                        <p className="text-slate-400 text-sm font-bold">今日尚無行程安排</p>
-                                    </div>
-                                )}
                             </div>
                         </div>
 
-                        {/* 地圖區塊 */}
-                        <div className="flex-1 relative overflow-hidden">
-                            <div ref={mapRef} className="w-full h-full" />
-                            <div className="absolute bottom-8 right-8 z-[1000] space-y-3">
-                                <div className="bg-white/90 backdrop-blur-md p-4 rounded-3xl shadow-2xl border border-white/50 text-xs space-y-3 pointer-events-none md:pointer-events-auto min-w-[120px]">
-                                    <div className="flex items-center gap-2 font-black text-slate-800 pb-1 border-b border-slate-100"><Icon name="info" className="w-4 h-4 text-blue-500" /> 地圖圖例</div>
-                                    <div className="flex items-center gap-3 font-bold text-slate-600"><div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-sm"></div> 主要行程</div>
-                                    <div className="flex items-center gap-3 font-bold text-slate-600"><div className="w-3 h-3 rounded-full bg-amber-500 border-2 border-white shadow-sm"></div> 備選景點</div>
+                        {/* 地圖區 */}
+                        <div className="map-wrapper flex-1">
+                            <div id="map-container" ref={mapRef}></div>
+                            <div className="absolute bottom-6 right-6 z-[1000] space-y-2 pointer-events-none md:pointer-events-auto">
+                                <div className="bg-white/90 backdrop-blur-sm p-3 rounded-2xl shadow-xl border border-white/50 text-[10px] space-y-2">
+                                    <div className="flex items-center gap-2 font-black text-slate-800 border-b border-slate-100 pb-1 italic"><Icon name="info" className="w-3 h-3 text-blue-500" /> 圖例</div>
+                                    <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm"></div> 主要行程</div>
+                                    <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm"></div> 備選景點</div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* 編輯彈窗 */}
+                    {/* 彈窗 */}
                     {isModalOpen && (
-                        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md overflow-y-auto">
-                            <div className="bg-white rounded-[40px] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in duration-300">
-                                <div className="bg-slate-900 p-6 text-white flex justify-between items-center">
-                                    <h2 className="text-lg font-black flex items-center gap-3 uppercase tracking-wider">
-                                        {editingItem ? <Icon name="edit-3" /> : <Icon name="plus-circle" />} 
+                        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+                            <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+                                <div className="bg-slate-900 p-5 text-white flex justify-between items-center">
+                                    <h2 className="text-md font-black flex items-center gap-2 uppercase tracking-widest italic">
                                         {editingItem ? 'Edit Destination' : 'New Destination'}
                                     </h2>
-                                    <button onClick={() => setIsModalOpen(false)} className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-all hover:rotate-90"><Icon name="x" className="w-6 h-6" /></button>
+                                    <button onClick={() => setIsModalOpen(false)}><Icon name="x" className="w-5 h-5" /></button>
                                 </div>
-                                <form onSubmit={handleSave} className="p-8 space-y-5 max-h-[75vh] overflow-y-auto">
+                                <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
                                     <div className="flex gap-4">
                                         <div className="flex-1">
-                                            <label className="text-[10px] font-black text-slate-400 mb-1.5 block uppercase tracking-tighter">Day</label>
-                                            <select value={formData.day} onChange={e => setFormData({...formData, day: e.target.value})} className="w-full border-2 border-slate-100 rounded-2xl p-3 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-bold">
+                                            <label className="text-[10px] font-black text-slate-400 mb-1 block uppercase">Day</label>
+                                            <select value={formData.day} onChange={e => setFormData({...formData, day: e.target.value})} className="w-full border rounded-xl p-2.5 font-bold outline-none focus:border-blue-500">
                                                 {[1,2,3,4,5,6].map(d => <option key={d} value={d}>Day {d}</option>)}
                                             </select>
                                         </div>
                                         <div className="flex-1">
-                                            <label className="text-[10px] font-black text-slate-400 mb-1.5 block uppercase tracking-tighter">Time</label>
-                                            <input type="text" placeholder="HH:mm" required value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full border-2 border-slate-100 rounded-2xl p-3 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-bold" />
+                                            <label className="text-[10px] font-black text-slate-400 mb-1 block uppercase">Time</label>
+                                            <input type="text" placeholder="HH:mm" required value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full border rounded-xl p-2.5 font-bold outline-none focus:border-blue-500" />
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 mb-2 block uppercase tracking-tighter">Manager</label>
+                                        <label className="text-[10px] font-black text-slate-400 mb-2 block uppercase">負責人</label>
                                         <div className="grid grid-cols-3 gap-2">
                                             {MEMBERS.map(m => (
-                                                <button type="button" key={m} onClick={() => setFormData({...formData, member: m})} className={`py-2.5 rounded-xl text-xs font-black border-2 transition-all ${formData.member === m ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50'}`}>{m}</button>
+                                                <button type="button" key={m} onClick={() => setFormData({...formData, member: m})} className={`py-2 rounded-xl text-xs font-black border-2 transition-all ${formData.member === m ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white text-slate-500'}`}>{m}</button>
                                             ))}
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 mb-2 block uppercase tracking-tighter">Category</label>
+                                        <label className="text-[10px] font-black text-slate-400 mb-2 block uppercase">類別</label>
                                         <div className="flex gap-2">
-                                            <button type="button" onClick={() => setFormData({...formData, type: 'main'})} className={`flex-1 py-3 rounded-2xl text-xs font-black border-2 transition-all flex items-center justify-center gap-2 ${formData.type === 'main' ? 'bg-blue-50 border-blue-600 text-blue-700 shadow-sm' : 'bg-white border-slate-100 text-slate-400'}`}>主要</button>
-                                            <button type="button" onClick={() => setFormData({...formData, type: 'backup'})} className={`flex-1 py-3 rounded-2xl text-xs font-black border-2 transition-all flex items-center justify-center gap-2 ${formData.type === 'backup' ? 'bg-amber-50 border-amber-500 text-amber-700 shadow-sm' : 'bg-white border-slate-100 text-slate-400'}`}>備選</button>
+                                            <button type="button" onClick={() => setFormData({...formData, type: 'main'})} className={`flex-1 py-2.5 rounded-xl text-xs font-black border-2 ${formData.type === 'main' ? 'bg-blue-50 border-blue-600 text-blue-700' : 'bg-white'}`}>主要行程</button>
+                                            <button type="button" onClick={() => setFormData({...formData, type: 'backup'})} className={`flex-1 py-2.5 rounded-xl text-xs font-black border-2 ${formData.type === 'backup' ? 'bg-amber-50 border-amber-500 text-amber-700' : 'bg-white'}`}>備選景點</button>
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 mb-1.5 block uppercase tracking-tighter">Content / Activity</label>
-                                        <input type="text" placeholder="行程標題或動作" required value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})} className="w-full border-2 border-slate-100 rounded-2xl p-3 font-bold outline-none focus:border-blue-500" />
+                                        <label className="text-[10px] font-black text-slate-400 mb-1 block uppercase">內容</label>
+                                        <input type="text" required value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})} className="w-full border rounded-xl p-2.5 font-bold outline-none focus:border-blue-500" />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 mb-1.5 block uppercase tracking-tighter">Store Name / Place</label>
-                                        <input type="text" placeholder="景點名稱或商家名稱" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full border-2 border-slate-100 rounded-2xl p-3 font-bold outline-none focus:border-blue-500" />
+                                        <label className="text-[10px] font-black text-slate-400 mb-1 block uppercase">商家名稱</label>
+                                        <input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full border rounded-xl p-2.5 font-bold outline-none focus:border-blue-500" />
                                     </div>
-                                    <div className="bg-slate-50 p-6 rounded-[32px] border-2 border-slate-100">
-                                        <label className="text-[10px] font-black text-blue-600 mb-2 block uppercase tracking-tighter">Google Map Link & Search</label>
-                                        <input type="url" placeholder="https://www.google.com/maps/..." value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} onBlur={handleUrlBlur} className="w-full border-2 border-slate-200 rounded-xl p-3 bg-white mb-4 text-xs font-medium focus:ring-4 focus:ring-blue-100 outline-none" />
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <span className="text-[10px] text-slate-400 font-black block mb-1">LAT 緯度</span>
-                                                <input type="number" step="any" value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl p-2.5 text-xs bg-white font-mono" />
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] text-slate-400 font-black block mb-1">LNG 經度</span>
-                                                <input type="number" step="any" value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl p-2.5 text-xs bg-white font-mono" />
-                                            </div>
+                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                        <label className="text-[10px] font-black text-blue-600 mb-2 block uppercase">Google Map Link & Search</label>
+                                        <input type="url" placeholder="Paste URL here..." value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} onBlur={handleUrlBlur} className="w-full border rounded-xl p-2.5 bg-white mb-3 text-[10px] outline-none" />
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <input type="number" step="any" value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} className="w-full border rounded-lg p-2 text-[10px] font-mono" placeholder="Lat" />
+                                            <input type="number" step="any" value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} className="w-full border rounded-lg p-2 text-[10px] font-mono" placeholder="Lng" />
                                         </div>
                                     </div>
-                                    <button type="submit" className="w-full bg-slate-900 text-white font-black py-5 rounded-[28px] shadow-2xl hover:bg-blue-600 active:scale-95 transition-all flex items-center justify-center gap-3 text-lg tracking-widest">
-                                        <Icon name="save" className="w-6 h-6" /> SAVE ITINERARY
+                                    <button type="submit" className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
+                                        <Icon name="save" /> SAVE ITINERARY
                                     </button>
                                 </form>
                             </div>
