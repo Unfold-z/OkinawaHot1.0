@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>沖繩 6 日自駕之旅 - 互動行程地圖</title>
+    <title>沖繩 6 日自駕之旅 - 互動行程與路線地圖</title>
     <!-- 引入外部資源 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -24,7 +24,7 @@
         .leaflet-popup-content-wrapper { border-radius: 16px; padding: 0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
         .leaflet-popup-content { margin: 8px; }
         
-        /* 自訂捲軸，增加 UI 互動感 */
+        /* 自訂捲軸 */
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -32,11 +32,15 @@
         
         /* 地圖標記懸停動畫 */
         .marker-anim { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        .marker-anim:hover { transform: scale(1.35); z-index: 1000 !important; }
+        .marker-anim:hover { transform: scale(1.2); z-index: 1000 !important; }
+
+        /* 導航路線動畫 */
+        .route-line { stroke-dasharray: 10, 10; animation: dash 20s linear infinite; }
+        @keyframes dash { to { stroke-dashoffset: -1000; } }
 
         /* 核心修正：地圖容器高度設定 */
         .map-wrapper { position: relative; width: 100%; height: 100%; flex: 1; background: #f8fafc; overflow: hidden; }
-        #map-container { width: 100%; height: 100%; min-height: 300px; }
+        #map-container { width: 100%; height: 100%; min-height: 300px; z-index: 1; }
         #root { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
         /* 防止行動端點擊閃爍 */
@@ -47,6 +51,9 @@
             .main-container { display: flex; flex-direction: row; height: calc(100vh - 64px); }
             .sidebar { width: 384px; height: 100%; }
         }
+        
+        /* Checkbox 樣式調整 */
+        .route-checkbox:checked + div { border-color: transparent; }
     </style>
 </head>
 <body>
@@ -71,11 +78,21 @@
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'okinawa-trip-2025';
         const MEMBERS = ["志展", "盧志", "大維", "禹康", "懿軒"];
 
-        // --- 子類別設定 ---
+        // --- 子類別與天數色彩設定 ---
         const SUB_TYPES = {
             attraction: { label: '景點', color: '#3b82f6', icon: 'camera', badgeBg: 'bg-blue-100', badgeText: 'text-blue-700', border: 'border-blue-500' },
             food: { label: '食物', color: '#ef4444', icon: 'utensils', badgeBg: 'bg-red-100', badgeText: 'text-red-700', border: 'border-red-500' },
             shopping: { label: '購物', color: '#a855f7', icon: 'shopping-bag', badgeBg: 'bg-purple-100', badgeText: 'text-purple-700', border: 'border-purple-500' }
+        };
+        
+        // 多日路線模式的顏色配對
+        const DAY_COLORS = {
+            1: '#3b82f6', // 藍
+            2: '#10b981', // 綠
+            3: '#ef4444', // 紅
+            4: '#f59e0b', // 黃
+            5: '#8b5cf6', // 紫
+            6: '#ec4899'  // 粉
         };
 
         // --- 行程種子資料 ---
@@ -102,10 +119,14 @@
             const [user, setUser] = useState(null);
             const [itinerary, setItinerary] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [activeDay, setActiveDay] = useState(1);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [editingItem, setEditingItem] = useState(null);
             const [isLocalMode, setIsLocalMode] = useState(!firebaseConfig);
+            
+            // 模式狀態：itinerary(單日行程) 或 route(多日路線圖)
+            const [viewMode, setViewMode] = useState('itinerary'); 
+            const [activeDay, setActiveDay] = useState(1);
+            const [routeDays, setRouteDays] = useState([1, 2, 3, 4, 5, 6]);
             
             const [formData, setFormData] = useState({
                 day: 1, time: '', content: '', location: '', url: '', lat: 26.2124, lng: 127.6809, member: MEMBERS[0], type: 'main', subType: 'attraction'
@@ -113,6 +134,7 @@
 
             const mapRef = useRef(null);
             const markersRef = useRef([]);
+            const polylinesRef = useRef([]);
             const leafletMap = useRef(null);
 
             // --- 1. Firebase 初始化 ---
@@ -175,7 +197,7 @@
                 return () => unsubscribeData();
             }, [user, isLocalMode]);
 
-            // --- 3. 地圖渲染與標記更新 ---
+            // --- 3. 地圖渲染與標記 / 連線更新 ---
             useEffect(() => {
                 if (!leafletMap.current && mapRef.current) {
                     leafletMap.current = L.map(mapRef.current, {
@@ -192,15 +214,58 @@
                 const updateMapDisplay = () => {
                     if (leafletMap.current) {
                         leafletMap.current.invalidateSize();
+                        
+                        // 清除舊標記與連線
                         markersRef.current.forEach(m => m.remove());
                         markersRef.current = [];
+                        polylinesRef.current.forEach(p => p.remove());
+                        polylinesRef.current = [];
 
-                        itinerary.forEach(item => {
-                            if (item.lat && item.lng) {
+                        const daysToRender = viewMode === 'route' ? routeDays : [activeDay];
+                        let hasPoints = false;
+                        let latlngBounds = [];
+
+                        daysToRender.forEach(day => {
+                            const dayItems = itinerary.filter(i => i.day === day).sort((a,b) => a.time.localeCompare(b.time));
+                            const validItems = dayItems.filter(i => i.lat && i.lng);
+                            const latlngs = validItems.map(i => [i.lat, i.lng]);
+
+                            if (latlngs.length > 0) {
+                                hasPoints = true;
+                                latlngBounds.push(...latlngs);
+                            }
+
+                            // 繪製連線 (Polyline)
+                            if (latlngs.length > 1) {
+                                const routeColor = viewMode === 'route' ? DAY_COLORS[day] : '#94a3b8';
+                                const routeLine = L.polyline(latlngs, {
+                                    color: routeColor,
+                                    weight: 4,
+                                    opacity: 0.8,
+                                    className: 'route-line',
+                                    lineJoin: 'round'
+                                }).addTo(leafletMap.current);
+                                polylinesRef.current.push(routeLine);
+                            }
+
+                            // 繪製標記 (Markers)
+                            validItems.forEach((item, index) => {
                                 const sub = SUB_TYPES[item.subType] || SUB_TYPES.attraction;
                                 const borderColor = item.type === 'backup' ? '#f59e0b' : '#ffffff';
-                                const html = `<div class="marker-anim" style="background-color: ${sub.color}; width: 14px; height: 14px; border: 2.5px solid ${borderColor}; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.4);"></div>`;
-                                const icon = L.divIcon({ html, className: '', iconSize: [14, 14], iconAnchor: [7, 7] });
+                                
+                                let html = '';
+                                if (viewMode === 'route') {
+                                    // 路線總覽模式：顯示大圓點與順序數字，顏色依據天數
+                                    const bgColor = DAY_COLORS[day];
+                                    html = `<div class="marker-anim flex items-center justify-center text-white font-bold" style="background-color: ${bgColor}; width: 22px; height: 22px; border: 2.5px solid ${borderColor}; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.4); font-size: 11px;">${index + 1}</div>`;
+                                } else {
+                                    // 單日模式：顯示小子類別圓點
+                                    html = `<div class="marker-anim" style="background-color: ${sub.color}; width: 14px; height: 14px; border: 2.5px solid ${borderColor}; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.4);"></div>`;
+                                }
+                                
+                                const iconSize = viewMode === 'route' ? [22, 22] : [14, 14];
+                                const iconAnchor = viewMode === 'route' ? [11, 11] : [7, 7];
+                                const icon = L.divIcon({ html, className: '', iconSize, iconAnchor });
 
                                 const marker = L.marker([item.lat, item.lng], { icon })
                                     .addTo(leafletMap.current)
@@ -222,14 +287,19 @@
                                         </div>
                                     `, { closeButton: false });
                                 markersRef.current.push(marker);
-                            }
+                            });
                         });
+                        
+                        // 若切換為路線模式且有座標點，嘗試稍微縮放至合適視野 (保留一點緩衝避免閃爍)
+                        if (viewMode === 'route' && hasPoints && latlngBounds.length > 0) {
+                            // leafletMap.current.fitBounds(latlngBounds, { padding: [50, 50] }); // 註解此行避免每次資料更新時畫面跳動，由用戶自行縮放即可
+                        }
                     }
                 };
 
                 const timer = setTimeout(updateMapDisplay, 300);
                 return () => clearTimeout(timer);
-            }, [itinerary, activeDay]);
+            }, [itinerary, activeDay, viewMode, routeDays]);
 
             const handleUrlBlur = (e) => {
                 const url = e.target.value;
@@ -280,6 +350,14 @@
                 if (window.innerWidth < 768) mapRef.current.scrollIntoView({ behavior: 'smooth' });
             };
 
+            const toggleRouteDay = (day) => {
+                if (routeDays.includes(day)) {
+                    setRouteDays(routeDays.filter(d => d !== day));
+                } else {
+                    setRouteDays([...routeDays, day].sort());
+                }
+            };
+
             if (loading) return (
                 <div className="flex h-screen items-center justify-center bg-blue-50">
                     <div className="flex flex-col items-center gap-4">
@@ -291,100 +369,187 @@
 
             return (
                 <div id="root">
-                    <header className="bg-slate-900 text-white p-4 shadow-xl flex-shrink-0 flex justify-between items-center z-20 h-16">
+                    <header className="bg-slate-900 text-white p-4 shadow-xl flex-shrink-0 flex justify-between items-center z-20 h-auto md:h-16 flex-wrap gap-4">
                         <div className="flex items-center gap-3">
-                            <div className="bg-blue-600 p-2 rounded-lg shadow-inner"><Icon name="map" className="w-5 h-5" /></div>
+                            <div className="bg-blue-600 p-2 rounded-lg shadow-inner hidden md:block"><Icon name="map" className="w-5 h-5" /></div>
                             <div>
-                                <h1 className="text-lg font-black tracking-tight leading-none">沖繩旅遊同步地圖</h1>
+                                <h1 className="text-lg font-black tracking-tight leading-none">沖繩旅遊地圖</h1>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-                                    {isLocalMode ? 'Offline Mode' : 'Real-time Sync Active'}
+                                    {isLocalMode ? 'Offline Mode' : 'Real-time Sync'}
                                 </p>
                             </div>
                         </div>
+                        
+                        {/* 模式切換按鈕 (導航欄) */}
+                        <div className="flex bg-slate-800 p-1 rounded-xl shadow-inner w-full md:w-auto order-last md:order-none justify-center">
+                            <button 
+                                onClick={() => setViewMode('itinerary')} 
+                                className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${viewMode === 'itinerary' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                <Icon name="list" className="w-3.5 h-3.5" /> 單日行程
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('route')} 
+                                className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${viewMode === 'route' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                <Icon name="route" className="w-3.5 h-3.5" /> 路線地圖
+                            </button>
+                        </div>
+
                         <button onClick={() => { setEditingItem(null); setIsModalOpen(true); }} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2 shadow-lg active:scale-95 transition-all">
                             <Icon name="plus" /> 新增
                         </button>
                     </header>
 
                     <div className="main-container flex-1 overflow-hidden">
+                        
+                        {/* 側邊欄 */}
                         <div className="sidebar flex flex-col border-r bg-white overflow-hidden shadow-2xl z-10 flex-shrink-0">
-                            <div className="flex overflow-x-auto p-4 bg-slate-50 gap-2 border-b flex-shrink-0 scrollbar-hide">
-                                {[1,2,3,4,5,6].map(d => (
-                                    <button 
-                                        key={d} 
-                                        onClick={() => setActiveDay(d)} 
-                                        className={`flex-shrink-0 w-12 h-10 rounded-xl font-black text-sm transition-all hover:scale-105 active:scale-95 ${
-                                            activeDay === d ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100 hover:text-slate-600'
-                                        }`}
-                                    >
-                                        D{d}
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                                {itinerary.filter(i => i.day === activeDay).map((item) => {
-                                    const sub = SUB_TYPES[item.subType] || SUB_TYPES.attraction;
-                                    const borderClass = item.subType === 'food' ? 'border-red-500/20 border-l-red-500 hover:border-red-500' : 
-                                                        item.subType === 'shopping' ? 'border-purple-500/20 border-l-purple-500 hover:border-purple-500' : 
-                                                        'border-blue-500/20 border-l-blue-500 hover:border-blue-500';
+                            
+                            {/* 根據模式顯示不同的側邊欄內容 */}
+                            {viewMode === 'itinerary' ? (
+                                <>
+                                    {/* 單日模式：天數切換 */}
+                                    <div className="flex overflow-x-auto p-4 bg-slate-50 gap-2 border-b flex-shrink-0 scrollbar-hide">
+                                        {[1,2,3,4,5,6].map(d => (
+                                            <button 
+                                                key={d} 
+                                                onClick={() => setActiveDay(d)} 
+                                                className={`flex-shrink-0 w-12 h-10 rounded-xl font-black text-sm transition-all hover:scale-105 active:scale-95 ${
+                                                    activeDay === d ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100 hover:text-slate-600'
+                                                }`}
+                                            >
+                                                D{d}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {/* 單日模式：行程列表 */}
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                                        {itinerary.filter(i => i.day === activeDay).map((item) => {
+                                            const sub = SUB_TYPES[item.subType] || SUB_TYPES.attraction;
+                                            const borderClass = item.subType === 'food' ? 'border-red-500/20 border-l-red-500 hover:border-red-500' : 
+                                                                item.subType === 'shopping' ? 'border-purple-500/20 border-l-purple-500 hover:border-purple-500' : 
+                                                                'border-blue-500/20 border-l-blue-500 hover:border-blue-500';
 
-                                    return (
-                                    <div 
-                                        key={item.id} 
-                                        onClick={() => focusOn(item.lat, item.lng)}
-                                        className={`group cursor-pointer relative bg-white border-2 rounded-2xl p-4 shadow-sm border-l-[6px] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${borderClass}`}
-                                    >
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-black text-slate-400 flex items-center gap-1"><Icon name="clock" className="w-3 h-3" /> {item.time}</span>
-                                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-black flex items-center gap-1 ${sub.badgeBg} ${sub.badgeText}`}>
-                                                    <Icon name={sub.icon} className="w-2.5 h-2.5" /> {sub.label}
-                                                </span>
-                                                {item.type === 'backup' && (
-                                                    <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-700 border border-amber-200">備選</span>
-                                                )}
+                                            return (
+                                            <div 
+                                                key={item.id} 
+                                                onClick={() => focusOn(item.lat, item.lng)}
+                                                className={`group cursor-pointer relative bg-white border-2 rounded-2xl p-4 shadow-sm border-l-[6px] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${borderClass}`}
+                                            >
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-black text-slate-400 flex items-center gap-1"><Icon name="clock" className="w-3 h-3" /> {item.time}</span>
+                                                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-black flex items-center gap-1 ${sub.badgeBg} ${sub.badgeText}`}>
+                                                            <Icon name={sub.icon} className="w-2.5 h-2.5" /> {sub.label}
+                                                        </span>
+                                                        {item.type === 'backup' && (
+                                                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-700 border border-amber-200">備選</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button onClick={(e) => { e.stopPropagation(); setEditingItem(item); setFormData(item); setIsModalOpen(true); }} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"><Icon name="edit-3" className="w-3.5 h-3.5" /></button>
+                                                        <button onClick={async (e) => { 
+                                                            e.stopPropagation();
+                                                            if(confirm('確定要刪除嗎？')) {
+                                                                if (isLocalMode) setItinerary(prev => prev.filter(i => i.id !== item.id));
+                                                                else await firebase.firestore().collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary').doc(item.id).delete();
+                                                            }
+                                                        }} className="p-1 hover:bg-red-50 rounded-lg text-red-300 hover:text-red-600 transition-colors"><Icon name="trash-2" className="w-3.5 h-3.5" /></button>
+                                                    </div>
+                                                </div>
+                                                <h3 className="font-bold text-sm mb-3 text-slate-800 leading-tight group-hover:text-blue-600 transition-colors">{item.content}</h3>
+                                                <div className="flex flex-wrap gap-2 items-center">
+                                                    <div className="flex items-center gap-1 text-[10px] text-slate-500 bg-slate-50 border border-slate-100 px-2 py-1 rounded-md">
+                                                        <Icon name="user" className="w-3 h-3" /> {item.member}
+                                                    </div>
+                                                    <div className="text-[10px] flex items-center gap-1 text-blue-600 font-black bg-blue-50 px-2 py-1 rounded-md transition-colors group-hover:bg-blue-100">
+                                                        <Icon name="map-pin" className="w-3 h-3" /> {item.location}
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={(e) => { e.stopPropagation(); setEditingItem(item); setFormData(item); setIsModalOpen(true); }} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"><Icon name="edit-3" className="w-3.5 h-3.5" /></button>
-                                                <button onClick={async (e) => { 
-                                                    e.stopPropagation();
-                                                    if(confirm('確定要刪除嗎？')) {
-                                                        if (isLocalMode) setItinerary(prev => prev.filter(i => i.id !== item.id));
-                                                        else await firebase.firestore().collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary').doc(item.id).delete();
-                                                    }
-                                                }} className="p-1 hover:bg-red-50 rounded-lg text-red-300 hover:text-red-600 transition-colors"><Icon name="trash-2" className="w-3.5 h-3.5" /></button>
+                                        )})}
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    {/* 路線地圖模式：多日選擇器與總覽 */}
+                                    <div className="flex flex-col h-full bg-slate-50">
+                                        <div className="p-5 border-b border-slate-200 bg-white">
+                                            <h2 className="font-black text-lg text-slate-800 mb-1 flex items-center gap-2"><Icon name="route" className="w-5 h-5 text-blue-600"/> 多日路線總覽</h2>
+                                            <p className="text-xs text-slate-500 mb-4">勾選下方天數以在地圖顯示該日軌跡</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {[1,2,3,4,5,6].map(d => (
+                                                    <label key={d} className={`flex items-center gap-2 p-2.5 rounded-xl border-2 cursor-pointer transition-all hover:bg-slate-50 ${routeDays.includes(d) ? 'border-slate-300 bg-white shadow-sm' : 'border-slate-100 opacity-60'}`}>
+                                                        <input type="checkbox" checked={routeDays.includes(d)} onChange={() => toggleRouteDay(d)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 route-checkbox" />
+                                                        <div className="w-3 h-3 rounded-full shadow-sm" style={{backgroundColor: DAY_COLORS[d]}}></div>
+                                                        <span className="font-bold text-slate-700 text-xs">Day {d} 路線</span>
+                                                    </label>
+                                                ))}
                                             </div>
                                         </div>
-                                        <h3 className="font-bold text-sm mb-3 text-slate-800 leading-tight group-hover:text-blue-600 transition-colors">{item.content}</h3>
-                                        <div className="flex flex-wrap gap-2 items-center">
-                                            <div className="flex items-center gap-1 text-[10px] text-slate-500 bg-slate-50 border border-slate-100 px-2 py-1 rounded-md">
-                                                <Icon name="user" className="w-3 h-3" /> {item.member}
-                                            </div>
-                                            <div className="text-[10px] flex items-center gap-1 text-blue-600 font-black bg-blue-50 px-2 py-1 rounded-md transition-colors group-hover:bg-blue-100">
-                                                <Icon name="map-pin" className="w-3 h-3" /> {item.location}
-                                            </div>
+                                        
+                                        {/* 路線列表預覽 */}
+                                        <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar bg-slate-50">
+                                            {routeDays.map(d => {
+                                                const dayItems = itinerary.filter(i => i.day === d).sort((a,b) => a.time.localeCompare(b.time));
+                                                if (dayItems.length === 0) return null;
+                                                return (
+                                                    <div key={d} className="relative">
+                                                        <div className="absolute left-[11px] top-6 bottom-0 w-0.5 bg-slate-200/80 rounded-full"></div>
+                                                        <h3 className="font-black text-sm mb-4 flex items-center gap-2 px-2 py-1 bg-white rounded-lg shadow-sm border border-slate-100 inline-flex" style={{color: DAY_COLORS[d]}}>
+                                                            <div className="w-2 h-2 rounded-full" style={{backgroundColor: DAY_COLORS[d]}}></div>
+                                                            Day {d} 停靠點
+                                                        </h3>
+                                                        <div className="space-y-4">
+                                                            {dayItems.map((item, idx) => (
+                                                                <div key={item.id} className="flex gap-3 relative z-10 pl-1 cursor-pointer group" onClick={() => focusOn(item.lat, item.lng)}>
+                                                                    <div className="w-[22px] h-[22px] rounded-full text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0 shadow-md group-hover:scale-110 transition-transform mt-0.5" style={{backgroundColor: DAY_COLORS[d]}}>{idx + 1}</div>
+                                                                    <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-100 group-hover:border-blue-300 transition-colors w-full">
+                                                                        <div className="text-[10px] font-black text-slate-400 mb-0.5"><Icon name="clock" className="w-2.5 h-2.5 inline pb-0.5"/> {item.time}</div>
+                                                                        <div className="text-xs font-bold text-slate-700 group-hover:text-blue-600 transition-colors truncate">{item.location || item.content}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {routeDays.length === 0 && (
+                                                <div className="text-center text-slate-400 font-bold text-sm py-10">請勾選上方天數顯示路線</div>
+                                            )}
                                         </div>
                                     </div>
-                                )})}
-                            </div>
+                                </>
+                            )}
                         </div>
 
+                        {/* 地圖區域 */}
                         <div className="map-wrapper flex-1">
                             <div id="map-container" ref={mapRef}></div>
                             <div className="absolute bottom-6 right-6 z-[1000] space-y-2 pointer-events-none md:pointer-events-auto">
-                                <div className="bg-white/90 backdrop-blur-sm p-3 rounded-2xl shadow-xl border border-white/50 text-[10px] space-y-2">
-                                    <div className="flex items-center gap-2 font-black text-slate-800 border-b border-slate-100 pb-1 italic"><Icon name="info" className="w-3 h-3 text-blue-500" /> 圖例</div>
-                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                                        <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm"></div> 景點</div>
-                                        <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></div> 食物</div>
-                                        <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-sm"></div> 購物</div>
-                                        <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-gray-300 border-[2px] border-amber-500 shadow-sm"></div> 備選(橘邊)</div>
-                                    </div>
+                                <div className="bg-white/95 backdrop-blur-md p-4 rounded-3xl shadow-xl border border-slate-100 text-[10px] space-y-3">
+                                    <div className="flex items-center gap-2 font-black text-slate-800 border-b border-slate-100 pb-2"><Icon name="info" className="w-4 h-4 text-blue-500" /> 地圖圖例</div>
+                                    
+                                    {viewMode === 'itinerary' ? (
+                                        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm border-2 border-white"></div> 景點</div>
+                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-3 h-3 rounded-full bg-red-500 shadow-sm border-2 border-white"></div> 食物</div>
+                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-3 h-3 rounded-full bg-purple-500 shadow-sm border-2 border-white"></div> 購物</div>
+                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-3 h-3 rounded-full bg-gray-300 border-[2px] border-amber-500 shadow-sm"></div> 備選(橘邊)</div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-2">
+                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-3 h-3 rounded-full shadow-sm flex items-center justify-center text-[6px] text-white bg-slate-800">1</div> 景點順序</div>
+                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-4 h-1 rounded-full bg-slate-400"></div> 動畫導航路線</div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     </div>
 
+                    {/* 彈窗 */}
                     {isModalOpen && (
                         <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
                             <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
@@ -394,7 +559,7 @@
                                     </h2>
                                     <button onClick={() => setIsModalOpen(false)}><Icon name="x" className="w-5 h-5" /></button>
                                 </div>
-                                <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+                                <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
                                     <div className="flex gap-4">
                                         <div className="flex-1">
                                             <label className="text-[10px] font-black text-slate-400 mb-1 block uppercase">Day</label>
