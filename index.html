@@ -1,4 +1,4 @@
-
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
@@ -24,7 +24,17 @@
         .leaflet-popup-content-wrapper { border-radius: 16px; padding: 0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
         .leaflet-popup-content { margin: 8px; }
         
-        /* 核心修正：地圖容器必須有明確的高度設定，避免 GitHub Pages 渲染問題 */
+        /* 自訂捲軸，增加 UI 互動感 */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* 地圖標記懸停動畫 */
+        .marker-anim { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .marker-anim:hover { transform: scale(1.35); z-index: 1000 !important; }
+
+        /* 核心修正：地圖容器高度設定 */
         .map-wrapper { position: relative; width: 100%; height: 100%; flex: 1; background: #f8fafc; overflow: hidden; }
         #map-container { width: 100%; height: 100%; min-height: 300px; }
         #root { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -45,14 +55,14 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- 安全取得環境變數 (GitHub Pages 部署時，建議將變數直接填入下方) ---
+        // --- 安全取得環境變數 ---
         const getFirebaseConfig = () => {
             try {
                 if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                     return JSON.parse(__firebase_config);
                 }
             } catch (e) {
-                console.warn("未偵測到環境變數，請確認 Firebase 設定是否正確。");
+                console.warn("未偵測到環境變數。");
             }
             return null;
         };
@@ -61,17 +71,24 @@
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'okinawa-trip-2025';
         const MEMBERS = ["志展", "盧志", "大維", "禹康", "懿軒"];
 
-        // --- 完整行程初始資料 (種子資料) ---
+        // --- 子類別設定 ---
+        const SUB_TYPES = {
+            attraction: { label: '景點', color: '#3b82f6', icon: 'camera', badgeBg: 'bg-blue-100', badgeText: 'text-blue-700', border: 'border-blue-500' },
+            food: { label: '食物', color: '#ef4444', icon: 'utensils', badgeBg: 'bg-red-100', badgeText: 'text-red-700', border: 'border-red-500' },
+            shopping: { label: '購物', color: '#a855f7', icon: 'shopping-bag', badgeBg: 'bg-purple-100', badgeText: 'text-purple-700', border: 'border-purple-500' }
+        };
+
+        // --- 行程種子資料 ---
         const INITIAL_ITINERARY = [
-            { id: 'seed_1', day: 1, time: '19:45', content: '全員抵達那霸機場、飯店 Check-in', location: '那霸機場', url: 'https://www.google.com/maps/search/?api=1&query=那霸機場', lat: 26.2064, lng: 127.6465, member: '志展', type: 'main' },
-            { id: 'seed_2', day: 1, time: '21:30', content: '晚餐：Torijin Naha (鳥神串燒)', location: 'Torijin Naha', url: 'https://www.google.com/maps/search/?api=1&query=那覇+焼き鳥+鳥神', lat: 26.2155, lng: 127.6792, member: '盧志', type: 'main' },
-            { id: 'seed_3', day: 2, time: '09:00', content: '市區取車 → 波上宮', location: '波上宮', url: 'https://www.google.com/maps/search/?api=1&query=波上宮', lat: 26.2207, lng: 127.6711, member: '大維', type: 'main' },
-            { id: 'seed_4', day: 2, time: '11:30', content: '午餐：漁師食堂 (海鮮)', location: '漁師食堂', url: 'https://www.google.com/maps/search/?api=1&query=漁師食堂+大木海產物', lat: 26.3456, lng: 127.7890, member: '禹康', type: 'main' },
-            { id: 'seed_5', day: 2, time: '14:00', content: '購物：PARCO CITY (北上順路採買)', location: 'PARCO CITY', url: 'https://www.google.com/maps/search/?api=1&query=浦添西海岸+PARCO+CITY', lat: 26.2625, lng: 127.6975, member: '懿軒', type: 'main' },
-            { id: 'seed_6', day: 3, time: '10:00', content: '重點：美麗海水族館', location: '美麗海水族館', url: 'https://www.google.com/maps/search/?api=1&query=沖縄美ら海水族館', lat: 26.6944, lng: 127.8779, member: '大維', type: 'main' },
-            { id: 'seed_7', day: 4, time: '12:00', content: '散策：美國村深度漫遊', location: '美國村', url: 'https://www.google.com/maps/search/?api=1&query=北谷美浜アメリカンビレッジ', lat: 26.3163, lng: 127.7576, member: '盧志', type: 'main' },
-            { id: 'seed_8', day: 5, time: '10:30', content: '景點：沖繩世界 (玉泉洞)', location: '沖繩世界', url: 'https://www.google.com/maps/search/?api=1&query=おきなわワールド', lat: 26.1397, lng: 127.7503, member: '志展', type: 'main' },
-            { id: 'seed_9', day: 6, time: '09:30', content: '景點：首里城參觀', location: '首里城', url: 'https://www.google.com/maps/search/?api=1&query=首里城', lat: 26.2170, lng: 127.7194, member: '懿軒', type: 'main' }
+            { id: 'seed_1', day: 1, time: '19:45', content: '全員抵達那霸機場、飯店 Check-in', location: '那霸機場', url: 'https://www.google.com/maps/search/?api=1&query=那霸機場', lat: 26.2064, lng: 127.6465, member: '志展', type: 'main', subType: 'attraction' },
+            { id: 'seed_2', day: 1, time: '21:30', content: '晚餐：Torijin Naha (鳥神串燒)', location: 'Torijin Naha', url: 'https://www.google.com/maps/search/?api=1&query=那覇+焼き鳥+鳥神', lat: 26.2155, lng: 127.6792, member: '盧志', type: 'main', subType: 'food' },
+            { id: 'seed_3', day: 2, time: '09:00', content: '市區取車 → 波上宮', location: '波上宮', url: 'https://www.google.com/maps/search/?api=1&query=波上宮', lat: 26.2207, lng: 127.6711, member: '大維', type: 'main', subType: 'attraction' },
+            { id: 'seed_4', day: 2, time: '11:30', content: '午餐：漁師食堂 (海鮮)', location: '漁師食堂', url: 'https://www.google.com/maps/search/?api=1&query=漁師食堂+大木海產物', lat: 26.3456, lng: 127.7890, member: '禹康', type: 'main', subType: 'food' },
+            { id: 'seed_5', day: 2, time: '14:00', content: '購物：PARCO CITY', location: 'PARCO CITY', url: 'https://www.google.com/maps/search/?api=1&query=浦添西海岸+PARCO+CITY', lat: 26.2625, lng: 127.6975, member: '懿軒', type: 'main', subType: 'shopping' },
+            { id: 'seed_6', day: 3, time: '10:00', content: '重點：美麗海水族館', location: '美麗海水族館', url: 'https://www.google.com/maps/search/?api=1&query=沖縄美ら海水族館', lat: 26.6944, lng: 127.8779, member: '大維', type: 'main', subType: 'attraction' },
+            { id: 'seed_7', day: 4, time: '12:00', content: '散策：美國村深度漫遊', location: '美國村', url: 'https://www.google.com/maps/search/?api=1&query=北谷美浜アメリカンビレッジ', lat: 26.3163, lng: 127.7576, member: '盧志', type: 'main', subType: 'attraction' },
+            { id: 'seed_8', day: 5, time: '10:30', content: '景點：沖繩世界 (玉泉洞)', location: '沖繩世界', url: 'https://www.google.com/maps/search/?api=1&query=おきなわワールド', lat: 26.1397, lng: 127.7503, member: '志展', type: 'main', subType: 'attraction' },
+            { id: 'seed_9', day: 6, time: '09:30', content: '景點：首里城參觀', location: '首里城', url: 'https://www.google.com/maps/search/?api=1&query=首里城', lat: 26.2170, lng: 127.7194, member: '懿軒', type: 'main', subType: 'attraction' }
         ];
 
         const Icon = ({ name, className = "w-4 h-4" }) => {
@@ -91,25 +108,23 @@
             const [isLocalMode, setIsLocalMode] = useState(!firebaseConfig);
             
             const [formData, setFormData] = useState({
-                day: 1, time: '', content: '', location: '', url: '', lat: 26.2124, lng: 127.6809, member: MEMBERS[0], type: 'main'
+                day: 1, time: '', content: '', location: '', url: '', lat: 26.2124, lng: 127.6809, member: MEMBERS[0], type: 'main', subType: 'attraction'
             });
 
             const mapRef = useRef(null);
             const markersRef = useRef([]);
             const leafletMap = useRef(null);
 
-            // --- 1. Firebase 初始化與驗證 (規則 3) ---
+            // --- 1. Firebase 初始化 ---
             useEffect(() => {
                 if (!firebaseConfig) {
                     setLoading(false);
                     return;
                 }
-
                 const setupFirebase = async () => {
                     try {
                         const app = firebase.apps.length > 0 ? firebase.app() : firebase.initializeApp(firebaseConfig);
                         const auth = firebase.auth();
-                        
                         const unsubscribeAuth = auth.onAuthStateChanged((u) => {
                             if (u) {
                                 setUser(u);
@@ -121,7 +136,6 @@
                                 }
                             }
                         });
-
                         return () => unsubscribeAuth();
                     } catch (err) {
                         console.error("Firebase Setup Error:", err);
@@ -129,11 +143,10 @@
                         setLoading(false);
                     }
                 };
-
                 setupFirebase();
             }, []);
 
-            // --- 2. Firestore 資料同步 (規則 1 & 2) ---
+            // --- 2. Firestore 同步 ---
             useEffect(() => {
                 if (isLocalMode) {
                     setItinerary(INITIAL_ITINERARY);
@@ -141,10 +154,8 @@
                     return;
                 }
                 if (!user) return;
-
                 const db = firebase.firestore();
                 const itineraryCol = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary');
-                
                 const unsubscribeData = itineraryCol.onSnapshot((snapshot) => {
                     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     if (data.length > 0) {
@@ -154,21 +165,18 @@
                         });
                         setItinerary(sorted);
                     } else {
-                        // 初始化種子資料
                         INITIAL_ITINERARY.forEach(item => itineraryCol.add(item));
                     }
                     setLoading(false);
                 }, (err) => {
-                    console.error("Firestore Sync Error:", err);
+                    console.error("Firestore Error:", err);
                     setLoading(false);
                 });
-
                 return () => unsubscribeData();
             }, [user, isLocalMode]);
 
-            // --- 3. 地圖核心邏輯 (解決白色圖台問題) ---
+            // --- 3. 地圖渲染與標記更新 ---
             useEffect(() => {
-                // 初始化地圖
                 if (!leafletMap.current && mapRef.current) {
                     leafletMap.current = L.map(mapRef.current, {
                         zoomControl: true,
@@ -181,36 +189,36 @@
                     }).addTo(leafletMap.current);
                 }
 
-                // 修正圖台尺寸與更新標記
                 const updateMapDisplay = () => {
                     if (leafletMap.current) {
-                        // 這是修復白色區塊的關鍵：強制地圖重新計算渲染邊界
                         leafletMap.current.invalidateSize();
-                        
-                        // 清除舊標記
                         markersRef.current.forEach(m => m.remove());
                         markersRef.current = [];
 
-                        // 過濾出目前天數或全部的標記 (此處顯示所有景點)
                         itinerary.forEach(item => {
                             if (item.lat && item.lng) {
-                                const color = item.type === 'backup' ? '#f59e0b' : '#3b82f6';
-                                const html = `<div style="background-color: ${color}; width: 14px; height: 14px; border: 2.5px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.4);"></div>`;
+                                const sub = SUB_TYPES[item.subType] || SUB_TYPES.attraction;
+                                const borderColor = item.type === 'backup' ? '#f59e0b' : '#ffffff';
+                                const html = `<div class="marker-anim" style="background-color: ${sub.color}; width: 14px; height: 14px; border: 2.5px solid ${borderColor}; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.4);"></div>`;
                                 const icon = L.divIcon({ html, className: '', iconSize: [14, 14], iconAnchor: [7, 7] });
 
                                 const marker = L.marker([item.lat, item.lng], { icon })
                                     .addTo(leafletMap.current)
                                     .bindPopup(`
-                                        <div class="p-2 min-w-[160px]">
-                                            <div class="flex items-center gap-1 mb-1">
-                                                <span class="text-[10px] px-2 py-0.5 rounded ${item.type === 'backup' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'} font-bold">
-                                                    ${item.type === 'backup' ? '備選' : '主要'}
+                                        <div class="p-2 min-w-[180px]">
+                                            <div class="flex items-center gap-1 mb-2">
+                                                <span class="text-[10px] px-2 py-0.5 rounded ${sub.badgeBg} ${sub.badgeText} font-bold">
+                                                    ${sub.label}
                                                 </span>
-                                                <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium">${item.member}</span>
+                                                ${item.type === 'backup' ? `<span class="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-bold border border-amber-200">備選</span>` : ''}
+                                                <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium ml-auto">${item.member}</span>
                                             </div>
-                                            <h3 class="font-bold text-sm text-slate-800">${item.location}</h3>
-                                            <p class="text-xs text-gray-500 mb-2 leading-tight">${item.content}</p>
-                                            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="text-xs bg-blue-600 text-white px-2 py-2 rounded-lg block text-center font-bold">開啟導航頁面</a>
+                                            <h3 class="font-bold text-sm text-slate-800 mb-1 leading-tight">${item.location}</h3>
+                                            <p class="text-xs text-gray-500 mb-4 leading-tight">${item.content}</p>
+                                            <a href="${item.url}" target="_blank" rel="noopener noreferrer" style="color: #ffffff !important;"
+                                               class="text-xs bg-blue-600 px-3 py-3 rounded-xl block text-center font-black shadow-lg hover:bg-blue-700 hover:shadow-xl active:scale-95 transition-all uppercase tracking-widest antialiased">
+                                               開啟導航頁面
+                                            </a>
                                         </div>
                                     `, { closeButton: false });
                                 markersRef.current.push(marker);
@@ -219,10 +227,9 @@
                     }
                 };
 
-                // 使用 requestAnimationFrame 確保 DOM 已經被瀏覽器繪製
                 const timer = setTimeout(updateMapDisplay, 300);
                 return () => clearTimeout(timer);
-            }, [itinerary, activeDay]); // 天數或資料改變時觸發
+            }, [itinerary, activeDay]);
 
             const handleUrlBlur = (e) => {
                 const url = e.target.value;
@@ -258,7 +265,7 @@
                 }
                 setIsModalOpen(false);
                 setEditingItem(null);
-                setFormData({ day: activeDay, time: '', content: '', location: '', url: '', lat: 26.2124, lng: 127.6809, member: MEMBERS[0], type: 'main' });
+                setFormData({ day: activeDay, time: '', content: '', location: '', url: '', lat: 26.2124, lng: 127.6809, member: MEMBERS[0], type: 'main', subType: 'attraction' });
             };
 
             const focusOn = (lat, lng) => {
@@ -277,14 +284,13 @@
                 <div className="flex h-screen items-center justify-center bg-blue-50">
                     <div className="flex flex-col items-center gap-4">
                         <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
-                        <p className="text-blue-600 font-bold animate-pulse">正在與 Firebase 同步行程...</p>
+                        <p className="text-blue-600 font-bold animate-pulse">與 Firebase 同步中...</p>
                     </div>
                 </div>
             );
 
             return (
                 <div id="root">
-                    {/* Header */}
                     <header className="bg-slate-900 text-white p-4 shadow-xl flex-shrink-0 flex justify-between items-center z-20 h-16">
                         <div className="flex items-center gap-3">
                             <div className="bg-blue-600 p-2 rounded-lg shadow-inner"><Icon name="map" className="w-5 h-5" /></div>
@@ -301,67 +307,84 @@
                     </header>
 
                     <div className="main-container flex-1 overflow-hidden">
-                        {/* 側邊欄 */}
                         <div className="sidebar flex flex-col border-r bg-white overflow-hidden shadow-2xl z-10 flex-shrink-0">
                             <div className="flex overflow-x-auto p-4 bg-slate-50 gap-2 border-b flex-shrink-0 scrollbar-hide">
                                 {[1,2,3,4,5,6].map(d => (
                                     <button 
                                         key={d} 
                                         onClick={() => setActiveDay(d)} 
-                                        className={`flex-shrink-0 w-12 h-10 rounded-xl font-black text-sm transition-all ${
-                                            activeDay === d ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'
+                                        className={`flex-shrink-0 w-12 h-10 rounded-xl font-black text-sm transition-all hover:scale-105 active:scale-95 ${
+                                            activeDay === d ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100 hover:text-slate-600'
                                         }`}
                                     >
                                         D{d}
                                     </button>
                                 ))}
                             </div>
-                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                                {itinerary.filter(i => i.day === activeDay).map((item) => (
-                                    <div key={item.id} className={`group relative bg-white border-2 rounded-2xl p-4 shadow-sm border-l-[6px] transition-all hover:shadow-md ${item.type === 'backup' ? 'border-amber-400/30 border-l-amber-400' : 'border-blue-500/10 border-l-blue-500'}`}>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                                {itinerary.filter(i => i.day === activeDay).map((item) => {
+                                    const sub = SUB_TYPES[item.subType] || SUB_TYPES.attraction;
+                                    const borderClass = item.subType === 'food' ? 'border-red-500/20 border-l-red-500 hover:border-red-500' : 
+                                                        item.subType === 'shopping' ? 'border-purple-500/20 border-l-purple-500 hover:border-purple-500' : 
+                                                        'border-blue-500/20 border-l-blue-500 hover:border-blue-500';
+
+                                    return (
+                                    <div 
+                                        key={item.id} 
+                                        onClick={() => focusOn(item.lat, item.lng)}
+                                        className={`group cursor-pointer relative bg-white border-2 rounded-2xl p-4 shadow-sm border-l-[6px] transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${borderClass}`}
+                                    >
                                         <div className="flex justify-between items-start mb-2">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xs font-black text-slate-400 flex items-center gap-1"><Icon name="clock" className="w-3 h-3" /> {item.time}</span>
-                                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-black ${item.type === 'backup' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                    {item.type === 'backup' ? '備選' : '主要'}
+                                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-black flex items-center gap-1 ${sub.badgeBg} ${sub.badgeText}`}>
+                                                    <Icon name={sub.icon} className="w-2.5 h-2.5" /> {sub.label}
                                                 </span>
+                                                {item.type === 'backup' && (
+                                                    <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-700 border border-amber-200">備選</span>
+                                                )}
                                             </div>
                                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => { setEditingItem(item); setFormData(item); setIsModalOpen(true); }} className="p-1 hover:bg-slate-100 rounded text-slate-400"><Icon name="edit-3" className="w-3.5 h-3.5" /></button>
-                                                <button onClick={async () => { if(confirm('確定要刪除嗎？')) {
-                                                    if (isLocalMode) setItinerary(prev => prev.filter(i => i.id !== item.id));
-                                                    else await firebase.firestore().collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary').doc(item.id).delete();
-                                                }}} className="p-1 hover:bg-red-50 rounded text-red-300"><Icon name="trash-2" className="w-3.5 h-3.5" /></button>
+                                                <button onClick={(e) => { e.stopPropagation(); setEditingItem(item); setFormData(item); setIsModalOpen(true); }} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"><Icon name="edit-3" className="w-3.5 h-3.5" /></button>
+                                                <button onClick={async (e) => { 
+                                                    e.stopPropagation();
+                                                    if(confirm('確定要刪除嗎？')) {
+                                                        if (isLocalMode) setItinerary(prev => prev.filter(i => i.id !== item.id));
+                                                        else await firebase.firestore().collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary').doc(item.id).delete();
+                                                    }
+                                                }} className="p-1 hover:bg-red-50 rounded-lg text-red-300 hover:text-red-600 transition-colors"><Icon name="trash-2" className="w-3.5 h-3.5" /></button>
                                             </div>
                                         </div>
-                                        <h3 className="font-bold text-sm mb-3 text-slate-800 leading-tight">{item.content}</h3>
+                                        <h3 className="font-bold text-sm mb-3 text-slate-800 leading-tight group-hover:text-blue-600 transition-colors">{item.content}</h3>
                                         <div className="flex flex-wrap gap-2 items-center">
-                                            <div className="flex items-center gap-1 text-[10px] text-slate-500 bg-slate-50 px-2 py-1 rounded-md">
+                                            <div className="flex items-center gap-1 text-[10px] text-slate-500 bg-slate-50 border border-slate-100 px-2 py-1 rounded-md">
                                                 <Icon name="user" className="w-3 h-3" /> {item.member}
                                             </div>
-                                            <button onClick={() => focusOn(item.lat, item.lng)} className="text-[10px] flex items-center gap-1 text-blue-600 font-black hover:text-blue-800 bg-blue-50 px-2 py-1 rounded-md transition-colors">
+                                            <div className="text-[10px] flex items-center gap-1 text-blue-600 font-black bg-blue-50 px-2 py-1 rounded-md transition-colors group-hover:bg-blue-100">
                                                 <Icon name="map-pin" className="w-3 h-3" /> {item.location}
-                                            </button>
+                                            </div>
                                         </div>
                                     </div>
-                                ))}
+                                )})}
                             </div>
                         </div>
 
-                        {/* 地圖區 */}
                         <div className="map-wrapper flex-1">
                             <div id="map-container" ref={mapRef}></div>
                             <div className="absolute bottom-6 right-6 z-[1000] space-y-2 pointer-events-none md:pointer-events-auto">
                                 <div className="bg-white/90 backdrop-blur-sm p-3 rounded-2xl shadow-xl border border-white/50 text-[10px] space-y-2">
                                     <div className="flex items-center gap-2 font-black text-slate-800 border-b border-slate-100 pb-1 italic"><Icon name="info" className="w-3 h-3 text-blue-500" /> 圖例</div>
-                                    <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm"></div> 主要行程</div>
-                                    <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm"></div> 備選景點</div>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                        <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm"></div> 景點</div>
+                                        <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></div> 食物</div>
+                                        <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-sm"></div> 購物</div>
+                                        <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-gray-300 border-[2px] border-amber-500 shadow-sm"></div> 備選(橘邊)</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* 彈窗 */}
                     {isModalOpen && (
                         <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
                             <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
@@ -393,10 +416,17 @@
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 mb-2 block uppercase">類別</label>
+                                        <label className="text-[10px] font-black text-slate-400 mb-2 block uppercase">類別與子類別</label>
+                                        <div className="flex gap-2 mb-3">
+                                            <button type="button" onClick={() => setFormData({...formData, type: 'main'})} className={`flex-1 py-2.5 rounded-xl text-xs font-black border-2 transition-all ${formData.type === 'main' ? 'bg-slate-800 border-slate-800 text-white shadow-md' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>主要行程</button>
+                                            <button type="button" onClick={() => setFormData({...formData, type: 'backup'})} className={`flex-1 py-2.5 rounded-xl text-xs font-black border-2 transition-all ${formData.type === 'backup' ? 'bg-amber-500 border-amber-500 text-white shadow-md' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>備選景點</button>
+                                        </div>
                                         <div className="flex gap-2">
-                                            <button type="button" onClick={() => setFormData({...formData, type: 'main'})} className={`flex-1 py-2.5 rounded-xl text-xs font-black border-2 ${formData.type === 'main' ? 'bg-blue-50 border-blue-600 text-blue-700' : 'bg-white'}`}>主要行程</button>
-                                            <button type="button" onClick={() => setFormData({...formData, type: 'backup'})} className={`flex-1 py-2.5 rounded-xl text-xs font-black border-2 ${formData.type === 'backup' ? 'bg-amber-50 border-amber-500 text-amber-700' : 'bg-white'}`}>備選景點</button>
+                                            {Object.entries(SUB_TYPES).map(([key, info]) => (
+                                                <button type="button" key={key} onClick={() => setFormData({...formData, subType: key})} className={`flex-1 py-2.5 rounded-xl text-xs font-black border-2 flex items-center justify-center gap-1 transition-all ${formData.subType === key ? `${info.badgeBg} ${info.border} ${info.badgeText} shadow-sm` : 'bg-white border-slate-100 text-slate-400 hover:bg-slate-50'}`}>
+                                                    <Icon name={info.icon} className="w-3.5 h-3.5" /> {info.label}
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
                                     <div>
