@@ -32,8 +32,8 @@
         
         /* 地圖樣式覆寫 */
         .leaflet-div-icon { background: transparent; border: none; }
-        .leaflet-popup-content-wrapper { border-radius: 16px; padding: 0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
-        .leaflet-popup-content { margin: 8px; }
+        .leaflet-popup-content-wrapper { border-radius: 16px; padding: 0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); overflow: hidden; }
+        .leaflet-popup-content { margin: 0; }
         
         /* 地圖標記懸停動畫 */
         .marker-anim { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
@@ -52,6 +52,9 @@
         /* 旋轉動畫(供讀取中圖示使用) */
         @keyframes spin { 100% { transform: rotate(360deg); } }
         .icon-spin { animation: spin 1s linear infinite; }
+
+        /* 拖曳動畫提示 */
+        .drag-over { border: 2px dashed #3b82f6 !important; opacity: 0.7; transform: scale(0.98); }
     </style>
 </head>
 <body>
@@ -78,7 +81,6 @@
                     return data.candidates?.[0]?.content?.parts?.[0]?.text || "無法產生內容。";
                 } catch (error) {
                     if (i === maxRetries - 1) return "API 呼叫失敗，請稍後再試。";
-                    // 延遲: 1s, 2s, 4s, 8s...
                     await new Promise(res => setTimeout(res, Math.pow(2, i) * 1000));
                 }
             }
@@ -150,6 +152,15 @@
             const [routeDays, setRouteDays] = useState([1, 2, 3, 4, 5, 6]);
             const [urlWarning, setUrlWarning] = useState("");
             
+            // --- OSRM 車程距離估算 ---
+            const [routeMetrics, setRouteMetrics] = useState({});
+
+            // --- 拖曳排序 ---
+            const [draggedItemId, setDraggedItemId] = useState(null);
+
+            // --- 天氣預報 ---
+            const [weatherData, setWeatherData] = useState(null);
+            
             // --- Gemini 狀態 ---
             const [isGeneratingContent, setIsGeneratingContent] = useState(false);
             const [isGettingAdvice, setIsGettingAdvice] = useState(false);
@@ -163,6 +174,56 @@
             const markersRef = useRef([]);
             const polylinesRef = useRef([]);
             const leafletMap = useRef(null);
+
+            // --- 智慧天氣預報邏輯 ---
+            useEffect(() => {
+                const fetchWeather = async () => {
+                    try {
+                        // 沖繩 2026-05-23 出發行程
+                        const tripStartDateStr = '2026-05-23';
+                        const tripDate = new Date(tripStartDateStr);
+                        const today = new Date();
+                        const diffDays = (tripDate - today) / (1000 * 60 * 60 * 24);
+
+                        let url = '';
+                        let isHistorical = false;
+
+                        if (diffDays > 14) {
+                            // 大於 14 天無真實預報，抓去年同期 (2025-05-23 ~ 2025-05-28)
+                            url = 'https://archive-api.open-meteo.com/v1/archive?latitude=26.2124&longitude=127.6809&start_date=2025-05-23&end_date=2025-05-28&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FTokyo';
+                            isHistorical = true;
+                        } else if (diffDays >= 0 && diffDays <= 14) {
+                            // 14天內，抓取該區間真實預報
+                            const endDate = new Date(tripDate);
+                            endDate.setDate(endDate.getDate() + 5);
+                            const startStr = tripDate.toISOString().split('T')[0];
+                            const endStr = endDate.toISOString().split('T')[0];
+                            url = `https://api.open-meteo.com/v1/forecast?latitude=26.2124&longitude=127.6809&start_date=${startStr}&end_date=${endStr}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FTokyo`;
+                        } else {
+                            // 行程已過或測試用，預設抓未來7天
+                            url = 'https://api.open-meteo.com/v1/forecast?latitude=26.2124&longitude=127.6809&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FTokyo';
+                        }
+
+                        const res = await fetch(url);
+                        const data = await res.json();
+                        if(data.daily) {
+                            setWeatherData({ daily: data.daily, isHistorical });
+                        }
+                    } catch(e) { console.error('天氣資訊取得失敗:', e); }
+                };
+                fetchWeather();
+            }, []);
+
+            const getWeatherIconName = (code) => {
+                if (code === undefined) return 'sun';
+                if (code <= 1) return 'sun';
+                if (code <= 3) return 'cloud-sun';
+                if (code <= 48) return 'cloud';
+                if (code <= 67 || (code >= 80 && code <= 82)) return 'cloud-rain';
+                if (code <= 77 || code === 85 || code === 86) return 'snowflake';
+                if (code >= 95) return 'cloud-lightning';
+                return 'sun';
+            };
 
             useEffect(() => {
                 if (!firebaseConfig) {
@@ -204,7 +265,7 @@
                 const db = firebase.firestore();
                 const itineraryCol = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary');
                 const unsubscribeData = itineraryCol.onSnapshot((snapshot) => {
-                    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
                     if (data.length > 0) {
                         const sorted = data.sort((a, b) => {
                             if (a.day !== b.day) return a.day - b.day;
@@ -212,7 +273,10 @@
                         });
                         setItinerary(sorted);
                     } else {
-                        INITIAL_ITINERARY.forEach(item => itineraryCol.add(item));
+                        INITIAL_ITINERARY.forEach(item => {
+                            const { id, ...itemData } = item;
+                            itineraryCol.doc(id).set(itemData);
+                        });
                     }
                     setLoading(false);
                 }, (err) => {
@@ -248,6 +312,7 @@
                     polylinesRef.current = [];
 
                     const daysToRender = viewMode === 'route' ? routeDays : [activeDay];
+                    const newMetrics = {};
                     
                     for (const day of daysToRender) {
                         const dayItems = itinerary.filter(i => i.day === day).sort((a,b) => a.time.localeCompare(b.time));
@@ -282,11 +347,11 @@
                                             ${item.type === 'backup' ? `<span class="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-bold border border-amber-200">備選</span>` : ''}
                                             <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium ml-auto">${item.member}</span>
                                         </div>
-                                        <h3 class="font-bold text-sm text-slate-800 mb-1 leading-tight truncate">${item.location}</h3>
-                                        <p class="text-xs text-gray-500 mb-3 leading-tight line-clamp-2">${item.content}</p>
+                                        <h3 class="font-bold text-sm text-slate-800 mb-1 leading-tight truncate">${item.location || item.content}</h3>
+                                        ${item.location ? `<p class="text-xs text-gray-500 mb-3 leading-tight line-clamp-2">${item.content}</p>` : ''}
                                         <a href="${item.url}" target="_blank" rel="noopener noreferrer" style="color: #ffffff !important;"
-                                           class="text-[11px] md:text-xs bg-blue-600 px-2 py-2 md:py-2.5 rounded-lg block text-center font-black shadow-md hover:bg-blue-700 active:scale-95 transition-all uppercase tracking-widest text-white">
-                                           開啟導航頁面
+                                           class="text-[11px] md:text-xs bg-blue-600 px-2 py-2 md:py-2.5 rounded-lg block text-center font-black shadow-md hover:bg-blue-700 active:scale-95 transition-all uppercase tracking-widest text-white mt-1">
+                                           開啟導航
                                         </a>
                                     </div>
                                 `, { closeButton: false, autoPanPadding: [20, 20] });
@@ -304,6 +369,9 @@
                                 if (!isActive) return;
 
                                 if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                                    // 儲存導航距離與時間
+                                    newMetrics[day] = data.routes[0].legs;
+
                                     const routeCoords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
                                     const routeLine = L.polyline(routeCoords, {
                                         color: routeColor,
@@ -329,6 +397,7 @@
                             }
                         }
                     }
+                    setRouteMetrics(newMetrics);
                 };
 
                 const timer = setTimeout(updateMapDisplay, 100);
@@ -345,6 +414,62 @@
                 window.addEventListener('resize', handleResize);
                 return () => window.removeEventListener('resize', handleResize);
             }, []);
+
+            // --- 拖曳排序處理 ---
+            const handleDragStart = (e, id) => {
+                e.dataTransfer.setData('text/plain', id);
+                setDraggedItemId(id);
+            };
+
+            const handleDragOver = (e) => {
+                e.preventDefault(); // 允許放下
+                e.currentTarget.classList.add('drag-over');
+            };
+
+            const handleDragLeave = (e) => {
+                e.currentTarget.classList.remove('drag-over');
+            };
+
+            const handleDrop = async (e, targetId) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('drag-over');
+                
+                const draggedId = e.dataTransfer.getData('text/plain');
+                if (draggedId === targetId) return;
+
+                const draggedItem = itinerary.find(i => i.id === draggedId);
+                const targetItem = itinerary.find(i => i.id === targetId);
+
+                if (!draggedItem || !targetItem) return;
+
+                // 交換時間
+                const tempTime = draggedItem.time;
+                const updatedDragged = { ...draggedItem, time: targetItem.time };
+                const updatedTarget = { ...targetItem, time: tempTime };
+
+                // 樂觀更新 UI
+                setItinerary(prev => prev.map(i => {
+                    if (i.id === draggedId) return updatedDragged;
+                    if (i.id === targetId) return updatedTarget;
+                    return i;
+                }).sort((a,b) => {
+                    if(a.day !== b.day) return a.day - b.day;
+                    return a.time.localeCompare(b.time);
+                }));
+
+                // 更新資料庫
+                if (!isLocalMode) {
+                    try {
+                        const db = firebase.firestore();
+                        const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary');
+                        await col.doc(draggedId).update({ time: updatedTarget.time });
+                        await col.doc(targetId).update({ time: updatedDragged.time });
+                    } catch (error) {
+                        console.error('拖曳排序更新失敗:', error);
+                    }
+                }
+                setDraggedItemId(null);
+            };
 
             // --- AI 功能處理 ---
             const handleGenerateContent = async () => {
@@ -401,8 +526,9 @@
 
             const handleSave = async (e) => {
                 e.preventDefault();
+                const { id, ...cleanFormData } = formData;
                 const data = { 
-                    ...formData, 
+                    ...cleanFormData, 
                     day: parseInt(formData.day), 
                     lat: parseFloat(formData.lat) || 26.2124, 
                     lng: parseFloat(formData.lng) || 127.6809 
@@ -466,8 +592,9 @@
                             <div className="bg-blue-600 p-2 rounded-lg shadow-inner hidden md:block"><Icon name="map" className="w-5 h-5" /></div>
                             <div>
                                 <h1 className="text-lg font-black tracking-tight leading-none">沖繩旅遊地圖</h1>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-                                    {isLocalMode ? 'Offline Mode' : 'Real-time Sync'}
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 flex gap-2">
+                                    <span>{isLocalMode ? 'Offline Mode' : 'Real-time Sync'}</span>
+                                    {weatherData?.isHistorical && <span className="text-amber-500">| 歷史同期天氣模式</span>}
                                 </p>
                             </div>
                         </div>
@@ -524,19 +651,27 @@
                         <div className="flex-1 md:flex-none w-full md:w-[30%] flex flex-col bg-slate-50 overflow-hidden shadow-2xl z-10 order-2 md:order-1 flex-shrink-0">
                             {viewMode === 'itinerary' ? (
                                 <>
-                                    {/* D1~D6 天數按鈕放大 */}
-                                    <div className="flex overflow-x-auto p-3 md:p-4 bg-white gap-2 border-b flex-shrink-0 scrollbar-hide shadow-sm z-10">
-                                        {[1,2,3,4,5,6].map(d => (
-                                            <button 
-                                                key={d} 
-                                                onClick={() => setActiveDay(d)} 
-                                                className={`flex-shrink-0 w-14 h-12 rounded-xl font-black text-base md:text-lg transition-all active:scale-90 ${
-                                                    activeDay === d ? 'bg-slate-900 text-white shadow-md transform scale-105' : 'bg-slate-100 text-slate-400 border border-slate-200 hover:bg-slate-200'
-                                                }`}
-                                            >
-                                                D{d}
-                                            </button>
-                                        ))}
+                                    <div className="flex overflow-x-auto p-3 bg-white gap-2 border-b flex-shrink-0 scrollbar-hide shadow-sm z-10">
+                                        {[1,2,3,4,5,6].map(d => {
+                                            const wcode = weatherData?.daily ? weatherData.daily.weather_code[d-1] : undefined;
+                                            const wtemp = weatherData?.daily ? Math.round(weatherData.daily.temperature_2m_max[d-1]) : '--';
+                                            return (
+                                                <button 
+                                                    key={d} 
+                                                    onClick={() => setActiveDay(d)} 
+                                                    className={`flex-shrink-0 w-16 py-1.5 rounded-xl font-black transition-all active:scale-90 flex flex-col items-center justify-center gap-0.5 ${
+                                                        activeDay === d ? 'bg-slate-900 text-white shadow-md transform scale-105' : 'bg-slate-100 text-slate-400 border border-slate-200 hover:bg-slate-200'
+                                                    }`}
+                                                >
+                                                    <span className="text-sm">D{d}</span>
+                                                    {weatherData && (
+                                                        <div className="flex items-center gap-0.5 text-[9px] opacity-90 font-bold">
+                                                            <Icon name={getWeatherIconName(wcode)} className="w-2.5 h-2.5" /> {wtemp}°
+                                                        </div>
+                                                    )}
+                                                </button>
+                                            )
+                                        })}
                                     </div>
                                     
                                     {itinerary.filter(i => i.day === activeDay).length > 0 && (
@@ -559,18 +694,25 @@
                                     )}
 
                                     <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50 pb-10">
+                                        <p className="text-[10px] text-center text-slate-400 font-bold mb-2">💡 提示：按住卡片可上下拖曳排序</p>
                                         {itinerary.filter(i => i.day === activeDay).map((item) => {
                                             const sub = SUB_TYPES[item.subType] || SUB_TYPES.attraction;
                                             const borderClass = item.subType === 'food' ? 'border-red-500/30 border-l-red-500' : 
                                                                 item.subType === 'shopping' ? 'border-purple-500/30 border-l-purple-500' : 
                                                                 item.subType === 'accommodation' ? 'border-orange-500/30 border-l-orange-500' :
                                                                 'border-blue-500/30 border-l-blue-500';
+                                            const isDragging = draggedItemId === item.id;
 
                                             return (
                                             <div 
                                                 key={item.id} 
+                                                draggable={true}
+                                                onDragStart={(e) => handleDragStart(e, item.id)}
+                                                onDragOver={handleDragOver}
+                                                onDragLeave={handleDragLeave}
+                                                onDrop={(e) => handleDrop(e, item.id)}
                                                 onClick={() => focusOn(item.lat, item.lng)}
-                                                className={`group cursor-pointer bg-white border-2 rounded-2xl p-4 shadow-sm border-l-[6px] transition-all duration-300 active:scale-[0.98] md:hover:-translate-y-1 md:hover:shadow-md ${borderClass}`}
+                                                className={`group cursor-pointer bg-white border-2 rounded-2xl p-4 shadow-sm border-l-[6px] transition-all duration-200 active:scale-[0.98] md:hover:-translate-y-1 md:hover:shadow-md overflow-hidden ${borderClass} ${isDragging ? 'opacity-40' : ''}`}
                                             >
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="flex items-center gap-2 flex-wrap">
@@ -622,26 +764,42 @@
                                             </div>
                                         </div>
                                         
-                                        <div className="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar bg-slate-50">
+                                        <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar bg-slate-50">
                                             {routeDays.map(d => {
                                                 const dayItems = itinerary.filter(i => i.day === d).sort((a,b) => a.time.localeCompare(b.time));
                                                 if (dayItems.length === 0) return null;
                                                 return (
                                                     <div key={d} className="relative">
                                                         <div className="absolute left-[13px] top-6 bottom-0 w-1 bg-slate-200/80 rounded-full"></div>
-                                                        <h3 className="font-black text-sm mb-3 flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg shadow-sm border border-slate-100 inline-flex" style={{color: DAY_COLORS[d]}}>
+                                                        <h3 className="font-black text-sm mb-4 flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg shadow-sm border border-slate-100 inline-flex" style={{color: DAY_COLORS[d]}}>
                                                             <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: DAY_COLORS[d]}}></div>
-                                                            Day {d} 停靠點
+                                                            Day {d} 停靠點與車程
                                                         </h3>
-                                                        <div className="space-y-3.5">
+                                                        <div className="space-y-0">
                                                             {dayItems.map((item, idx) => (
-                                                                <div key={item.id} className="flex gap-3 relative z-10 pl-0.5 cursor-pointer group active:scale-[0.98] transition-transform" onClick={() => focusOn(item.lat, item.lng)}>
-                                                                    <div className="w-[26px] h-[26px] rounded-full text-white flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-md mt-1.5" style={{backgroundColor: DAY_COLORS[d]}}>{idx + 1}</div>
-                                                                    <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 w-full overflow-hidden group-hover:border-blue-300 transition-colors">
-                                                                        <div className="text-xs font-black text-slate-400 mb-1"><Icon name="clock" className="w-3 h-3 inline pb-0.5"/> {item.time}</div>
-                                                                        <div className="text-sm md:text-base font-bold text-slate-700 truncate leading-tight group-hover:text-blue-600 transition-colors">{item.location || item.content}</div>
+                                                                <React.Fragment key={item.id}>
+                                                                    <div className="flex gap-3 relative z-10 pl-0.5 cursor-pointer group active:scale-[0.98] transition-transform" onClick={() => focusOn(item.lat, item.lng)}>
+                                                                        <div className="w-[26px] h-[26px] rounded-full text-white flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-md mt-1.5" style={{backgroundColor: DAY_COLORS[d]}}>{idx + 1}</div>
+                                                                        <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 w-full overflow-hidden group-hover:border-blue-300 transition-colors">
+                                                                            <div className="text-xs font-black text-slate-400 mb-1"><Icon name="clock" className="w-3 h-3 inline pb-0.5"/> {item.time}</div>
+                                                                            <div className="text-sm md:text-base font-bold text-slate-700 truncate leading-tight group-hover:text-blue-600 transition-colors">{item.location || item.content}</div>
+                                                                        </div>
                                                                     </div>
-                                                                </div>
+                                                                    
+                                                                    {/* 顯示 OSRM 計算出來的點對點車程與距離 */}
+                                                                    {idx < dayItems.length - 1 && routeMetrics[d] && routeMetrics[d][idx] && (
+                                                                        <div className="flex items-center gap-2 py-3 pl-[38px] text-[11px] font-bold text-slate-500">
+                                                                            <div className="bg-slate-200 rounded-md px-2 py-1 flex items-center gap-1.5 shadow-inner">
+                                                                                <Icon name="car" className="w-3 h-3" />
+                                                                                車程約 {Math.round(routeMetrics[d][idx].duration / 60)} 分鐘 ({(routeMetrics[d][idx].distance / 1000).toFixed(1)} km)
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {/* 若 OSRM 尚未載入或失敗，保留視覺間距 */}
+                                                                    {idx < dayItems.length - 1 && (!routeMetrics[d] || !routeMetrics[d][idx]) && (
+                                                                        <div className="py-2"></div>
+                                                                    )}
+                                                                </React.Fragment>
                                                             ))}
                                                         </div>
                                                     </div>
@@ -729,7 +887,7 @@
                                         <label className="text-xs font-black text-slate-400 mb-1 block uppercase">地點名稱</label>
                                         <input type="text" placeholder="例：燒肉神社 那霸店" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full border-2 border-slate-100 rounded-xl p-2.5 font-bold outline-none focus:border-blue-500 text-base" />
                                     </div>
-                                    
+
                                     {/* AI 生成行程內容 */}
                                     <div className="bg-purple-50/50 p-4 rounded-2xl border-2 border-purple-100/50">
                                         <label className="text-[11px] font-black text-purple-700 mb-1 block uppercase">行程內容</label>
