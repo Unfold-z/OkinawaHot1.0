@@ -362,15 +362,15 @@
                         <div className="w-full md:w-auto flex bg-slate-800 p-1 rounded-xl shadow-inner order-last md:order-none justify-center">
                             <button 
                                 onClick={() => setViewMode('itinerary')} 
-                                className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${viewMode === 'itinerary' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                                className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${viewMode === 'itinerary' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
                             >
-                                <Icon name="list" className="w-3.5 h-3.5" /> 單日行程
+                                <Icon name="list" className="w-4 h-4" /> 單日行程
                             </button>
                             <button 
                                 onClick={() => setViewMode('route')} 
-                                className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${viewMode === 'route' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                                className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${viewMode === 'route' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
                             >
-                                <Icon name="route" className="w-3.5 h-3.5" /> 路線地圖
+                                <Icon name="route" className="w-4 h-4" /> 路線地圖
                             </button>
                         </div>
                     </header>
@@ -382,18 +382,18 @@
                             <div id="map-container" ref={mapRef} className="absolute inset-0 w-full h-full z-0 bg-slate-100"></div>
                             
                             <div className="absolute bottom-4 left-4 z-[1000] pointer-events-none md:pointer-events-auto">
-                                <div className="bg-white/95 backdrop-blur-md p-2.5 rounded-xl shadow-lg border border-slate-100 text-[10px] space-y-1.5">
-                                    <div className="flex items-center gap-2 font-black text-slate-800 border-b border-slate-100 pb-1"><Icon name="info" className="w-3 h-3 text-blue-500" /> 圖例</div>
+                                <div className="bg-white/95 backdrop-blur-md p-2.5 rounded-xl shadow-lg border border-slate-100 text-xs space-y-1.5">
+                                    <div className="flex items-center gap-2 font-black text-slate-800 border-b border-slate-100 pb-1"><Icon name="info" className="w-4 h-4 text-blue-500" /> 圖例</div>
                                     {viewMode === 'itinerary' ? (
-                                        <div className="flex flex-col gap-y-1">
-                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm border border-white"></div> 景點</div>
-                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm border border-white"></div> 食物</div>
-                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-sm border border-white"></div> 購物</div>
+                                        <div className="flex flex-col gap-y-1.5">
+                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm border border-white"></div> 景點</div>
+                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-3 h-3 rounded-full bg-red-500 shadow-sm border border-white"></div> 食物</div>
+                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-3 h-3 rounded-full bg-purple-500 shadow-sm border border-white"></div> 購物</div>
                                         </div>
                                     ) : (
-                                        <div className="flex flex-col gap-1">
-                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-3 h-3 rounded-full shadow-sm flex items-center justify-center text-[6px] text-white bg-slate-800">1</div> 順序</div>
-                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-3 h-1 rounded-full bg-slate-400"></div> 動畫路線</div>
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-4 h-4 rounded-full shadow-sm flex items-center justify-center text-[8px] text-white bg-slate-800">1</div> 順序</div>
+                                            <div className="flex items-center gap-2 font-bold text-slate-600"><div className="w-4 h-1.5 rounded-full bg-slate-400"></div> 動畫路線</div>
                                         </div>
                                     )}
                                 </div>
@@ -404,12 +404,13 @@
                         <div className="flex-1 md:flex-none w-full md:w-[30%] flex flex-col bg-slate-50 overflow-hidden shadow-2xl z-10 order-2 md:order-1 flex-shrink-0">
                             {viewMode === 'itinerary' ? (
                                 <>
-                                    <div className="flex overflow-x-auto p-2.5 md:p-3 bg-white gap-1.5 border-b flex-shrink-0 scrollbar-hide shadow-sm z-10">
+                                    {/* D1~D6 天數按鈕放大 */}
+                                    <div className="flex overflow-x-auto p-3 md:p-4 bg-white gap-2 border-b flex-shrink-0 scrollbar-hide shadow-sm z-10">
                                         {[1,2,3,4,5,6].map(d => (
                                             <button 
                                                 key={d} 
                                                 onClick={() => setActiveDay(d)} 
-                                                className={`flex-shrink-0 w-10 h-8 md:w-9 md:h-8 rounded-lg font-black text-[11px] transition-all active:scale-90 ${
+                                                className={`flex-shrink-0 w-14 h-12 rounded-xl font-black text-base md:text-lg transition-all active:scale-90 ${
                                                     activeDay === d ? 'bg-slate-900 text-white shadow-md transform scale-105' : 'bg-slate-100 text-slate-400 border border-slate-200 hover:bg-slate-200'
                                                 }`}
                                             >
@@ -417,7 +418,7 @@
                                             </button>
                                         ))}
                                     </div>
-                                    <div className="flex-1 overflow-y-auto p-3 md:p-3.5 space-y-3 custom-scrollbar bg-slate-50 pb-10">
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50 pb-10">
                                         {itinerary.filter(i => i.day === activeDay).map((item) => {
                                             const sub = SUB_TYPES[item.subType] || SUB_TYPES.attraction;
                                             const borderClass = item.subType === 'food' ? 'border-red-500/30 border-l-red-500' : 
@@ -428,36 +429,36 @@
                                             <div 
                                                 key={item.id} 
                                                 onClick={() => focusOn(item.lat, item.lng)}
-                                                className={`group cursor-pointer bg-white border-2 rounded-xl p-3 shadow-sm border-l-[4px] transition-all duration-300 active:scale-[0.98] md:hover:-translate-y-1 md:hover:shadow-md ${borderClass}`}
+                                                className={`group cursor-pointer bg-white border-2 rounded-2xl p-4 shadow-sm border-l-[6px] transition-all duration-300 active:scale-[0.98] md:hover:-translate-y-1 md:hover:shadow-md ${borderClass}`}
                                             >
-                                                <div className="flex justify-between items-start mb-1.5">
-                                                    <div className="flex items-center gap-1 flex-wrap">
-                                                        <span className="text-[10px] font-black text-slate-500 flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded"><Icon name="clock" className="w-2.5 h-2.5" /> {item.time}</span>
-                                                        <span className={`text-[8px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5 ${sub.badgeBg} ${sub.badgeText}`}>
-                                                            <Icon name={sub.icon} className="w-2 h-2" /> {sub.label}
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="text-xs md:text-sm font-black text-slate-500 flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-md"><Icon name="clock" className="w-3.5 h-3.5" /> {item.time}</span>
+                                                        <span className={`text-xs px-2.5 py-1 rounded-md font-black flex items-center gap-1 ${sub.badgeBg} ${sub.badgeText}`}>
+                                                            <Icon name={sub.icon} className="w-3 h-3" /> {sub.label}
                                                         </span>
                                                         {item.type === 'backup' && (
-                                                            <span className="text-[8px] px-1.5 py-0.5 rounded font-black bg-amber-100 text-amber-700 border border-amber-200">備選</span>
+                                                            <span className="text-xs px-2.5 py-1 rounded-md font-black bg-amber-100 text-amber-700 border border-amber-200">備選</span>
                                                         )}
                                                     </div>
-                                                    <div className="flex gap-0.5">
-                                                        <button onClick={(e) => { e.stopPropagation(); setEditingItem(item); setFormData(item); setIsModalOpen(true); }} className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-blue-600 transition-colors"><Icon name="edit-3" className="w-3.5 h-3.5" /></button>
+                                                    <div className="flex gap-1">
+                                                        <button onClick={(e) => { e.stopPropagation(); setEditingItem(item); setFormData(item); setIsModalOpen(true); }} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"><Icon name="edit-3" className="w-4 h-4" /></button>
                                                         <button onClick={async (e) => { 
                                                             e.stopPropagation();
                                                             if(confirm('確定要刪除嗎？')) {
                                                                 if (isLocalMode) setItinerary(prev => prev.filter(i => i.id !== item.id));
                                                                 else await firebase.firestore().collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary').doc(item.id).delete();
                                                             }
-                                                        }} className="p-1 hover:bg-red-50 rounded text-red-300 hover:text-red-600 transition-colors"><Icon name="trash-2" className="w-3.5 h-3.5" /></button>
+                                                        }} className="p-1.5 hover:bg-red-50 rounded-lg text-red-300 hover:text-red-600 transition-colors"><Icon name="trash-2" className="w-4 h-4" /></button>
                                                     </div>
                                                 </div>
-                                                <h3 className="font-bold text-sm mb-2 text-slate-800 leading-tight group-hover:text-blue-600 transition-colors">{item.content}</h3>
-                                                <div className="flex flex-wrap gap-1.5 items-center">
-                                                    <div className="flex items-center gap-1 text-[9px] text-slate-500 bg-white border border-slate-200 px-1.5 py-0.5 rounded">
-                                                        <Icon name="user" className="w-2.5 h-2.5" /> {item.member}
+                                                <h3 className="font-bold text-lg mb-3 text-slate-800 leading-tight group-hover:text-blue-600 transition-colors">{item.content}</h3>
+                                                <div className="flex flex-wrap gap-2 items-center">
+                                                    <div className="flex items-center gap-1 text-xs text-slate-500 bg-white border border-slate-200 px-2.5 py-1.5 rounded-md">
+                                                        <Icon name="user" className="w-3.5 h-3.5" /> {item.member}
                                                     </div>
-                                                    <div className="text-[9px] flex items-center gap-1 text-blue-600 font-black bg-blue-50 px-1.5 py-0.5 rounded transition-colors truncate max-w-full">
-                                                        <Icon name="map-pin" className="w-2.5 h-2.5 flex-shrink-0" /> <span className="truncate">{item.location}</span>
+                                                    <div className="text-xs flex items-center gap-1 text-blue-600 font-black bg-blue-50 px-2.5 py-1.5 rounded-md transition-colors truncate max-w-full">
+                                                        <Icon name="map-pin" className="w-3.5 h-3.5 flex-shrink-0" /> <span className="truncate">{item.location}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -467,37 +468,37 @@
                             ) : (
                                 <>
                                     <div className="flex flex-col h-full bg-slate-50 pb-10">
-                                        <div className="p-3 border-b border-slate-200 bg-white z-10 shadow-sm flex-shrink-0">
-                                            <h2 className="font-black text-sm text-slate-800 mb-1 flex items-center gap-1.5"><Icon name="route" className="w-4 h-4 text-blue-600"/> 顯示路線</h2>
-                                            <div className="grid grid-cols-3 gap-1.5 mt-2">
+                                        <div className="p-4 border-b border-slate-200 bg-white z-10 shadow-sm flex-shrink-0">
+                                            <h2 className="font-black text-base text-slate-800 mb-2 flex items-center gap-1.5"><Icon name="route" className="w-5 h-5 text-blue-600"/> 顯示路線</h2>
+                                            <div className="grid grid-cols-3 gap-2 mt-2">
                                                 {[1,2,3,4,5,6].map(d => (
-                                                    <label key={d} className={`flex items-center gap-1 p-1.5 rounded-lg border-2 cursor-pointer transition-all active:scale-95 ${routeDays.includes(d) ? 'border-slate-300 bg-slate-50 shadow-sm' : 'border-slate-100 opacity-60 bg-white'}`}>
-                                                        <input type="checkbox" checked={routeDays.includes(d)} onChange={() => toggleRouteDay(d)} className="w-3 h-3 rounded text-blue-600 focus:ring-blue-500 route-checkbox" />
-                                                        <div className="w-2 h-2 rounded-full shadow-sm flex-shrink-0" style={{backgroundColor: DAY_COLORS[d]}}></div>
-                                                        <span className="font-bold text-slate-700 text-[10px] whitespace-nowrap">D{d}</span>
+                                                    <label key={d} className={`flex items-center gap-2 p-2 rounded-lg border-2 cursor-pointer transition-all active:scale-95 ${routeDays.includes(d) ? 'border-slate-300 bg-slate-50 shadow-sm' : 'border-slate-100 opacity-60 bg-white'}`}>
+                                                        <input type="checkbox" checked={routeDays.includes(d)} onChange={() => toggleRouteDay(d)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 route-checkbox" />
+                                                        <div className="w-3 h-3 rounded-full shadow-sm flex-shrink-0" style={{backgroundColor: DAY_COLORS[d]}}></div>
+                                                        <span className="font-bold text-slate-700 text-sm whitespace-nowrap">D{d}</span>
                                                     </label>
                                                 ))}
                                             </div>
                                         </div>
                                         
-                                        <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar bg-slate-50">
+                                        <div className="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar bg-slate-50">
                                             {routeDays.map(d => {
                                                 const dayItems = itinerary.filter(i => i.day === d).sort((a,b) => a.time.localeCompare(b.time));
                                                 if (dayItems.length === 0) return null;
                                                 return (
                                                     <div key={d} className="relative">
-                                                        <div className="absolute left-[9px] top-5 bottom-0 w-0.5 bg-slate-200/80 rounded-full"></div>
-                                                        <h3 className="font-black text-[11px] mb-2.5 flex items-center gap-1.5 px-2 py-1 bg-white rounded-md shadow-sm border border-slate-100 inline-flex" style={{color: DAY_COLORS[d]}}>
-                                                            <div className="w-1.5 h-1.5 rounded-full" style={{backgroundColor: DAY_COLORS[d]}}></div>
+                                                        <div className="absolute left-[13px] top-6 bottom-0 w-1 bg-slate-200/80 rounded-full"></div>
+                                                        <h3 className="font-black text-sm mb-3 flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg shadow-sm border border-slate-100 inline-flex" style={{color: DAY_COLORS[d]}}>
+                                                            <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: DAY_COLORS[d]}}></div>
                                                             Day {d} 停靠點
                                                         </h3>
-                                                        <div className="space-y-2.5">
+                                                        <div className="space-y-3.5">
                                                             {dayItems.map((item, idx) => (
-                                                                <div key={item.id} className="flex gap-2 relative z-10 pl-0.5 cursor-pointer group active:scale-[0.98] transition-transform" onClick={() => focusOn(item.lat, item.lng)}>
-                                                                    <div className="w-[18px] h-[18px] rounded-full text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0 shadow-md mt-1" style={{backgroundColor: DAY_COLORS[d]}}>{idx + 1}</div>
-                                                                    <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-100 w-full overflow-hidden">
-                                                                        <div className="text-[9px] font-black text-slate-400 mb-0.5"><Icon name="clock" className="w-2 h-2 inline pb-0.5"/> {item.time}</div>
-                                                                        <div className="text-[11px] font-bold text-slate-700 truncate leading-tight">{item.location || item.content}</div>
+                                                                <div key={item.id} className="flex gap-3 relative z-10 pl-0.5 cursor-pointer group active:scale-[0.98] transition-transform" onClick={() => focusOn(item.lat, item.lng)}>
+                                                                    <div className="w-[26px] h-[26px] rounded-full text-white flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-md mt-1.5" style={{backgroundColor: DAY_COLORS[d]}}>{idx + 1}</div>
+                                                                    <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 w-full overflow-hidden group-hover:border-blue-300 transition-colors">
+                                                                        <div className="text-xs font-black text-slate-400 mb-1"><Icon name="clock" className="w-3 h-3 inline pb-0.5"/> {item.time}</div>
+                                                                        <div className="text-sm md:text-base font-bold text-slate-700 truncate leading-tight group-hover:text-blue-600 transition-colors">{item.location || item.content}</div>
                                                                     </div>
                                                                 </div>
                                                             ))}
@@ -506,7 +507,7 @@
                                                 );
                                             })}
                                             {routeDays.length === 0 && (
-                                                <div className="text-center text-slate-400 font-bold text-xs py-10">請勾選上方天數顯示路線</div>
+                                                <div className="text-center text-slate-400 font-bold text-sm py-10">請勾選上方天數顯示路線</div>
                                             )}
                                         </div>
                                     </div>
@@ -528,55 +529,55 @@
                                 <form onSubmit={handleSave} className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1 pb-10">
                                     <div className="flex gap-3">
                                         <div className="flex-1">
-                                            <label className="text-[10px] font-black text-slate-400 mb-1 block uppercase">Day</label>
+                                            <label className="text-xs font-black text-slate-400 mb-1 block uppercase">Day</label>
                                             <select value={formData.day} onChange={e => setFormData({...formData, day: e.target.value})} className="w-full border-2 border-slate-100 rounded-xl p-2.5 font-bold outline-none focus:border-blue-500 bg-white">
                                                 {[1,2,3,4,5,6].map(d => <option key={d} value={d}>Day {d}</option>)}
                                             </select>
                                         </div>
                                         <div className="flex-1">
-                                            <label className="text-[10px] font-black text-slate-400 mb-1 block uppercase">Time</label>
+                                            <label className="text-xs font-black text-slate-400 mb-1 block uppercase">Time</label>
                                             <input type="text" placeholder="HH:mm" required value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full border-2 border-slate-100 rounded-xl p-2.5 font-bold outline-none focus:border-blue-500" />
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 mb-1.5 block uppercase">負責人</label>
+                                        <label className="text-xs font-black text-slate-400 mb-1.5 block uppercase">負責人</label>
                                         <div className="grid grid-cols-3 gap-2">
                                             {MEMBERS.map(m => (
-                                                <button type="button" key={m} onClick={() => setFormData({...formData, member: m})} className={`py-2 rounded-xl text-xs font-black border-2 transition-all ${formData.member === m ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500'}`}>{m}</button>
+                                                <button type="button" key={m} onClick={() => setFormData({...formData, member: m})} className={`py-2 rounded-xl text-sm font-black border-2 transition-all ${formData.member === m ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500'}`}>{m}</button>
                                             ))}
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 mb-1.5 block uppercase">類別與子類別</label>
+                                        <label className="text-xs font-black text-slate-400 mb-1.5 block uppercase">類別與子類別</label>
                                         <div className="flex gap-2 mb-2">
-                                            <button type="button" onClick={() => setFormData({...formData, type: 'main'})} className={`flex-1 py-2.5 rounded-xl text-xs font-black border-2 transition-all ${formData.type === 'main' ? 'bg-slate-800 border-slate-800 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500'}`}>主要行程</button>
-                                            <button type="button" onClick={() => setFormData({...formData, type: 'backup'})} className={`flex-1 py-2.5 rounded-xl text-xs font-black border-2 transition-all ${formData.type === 'backup' ? 'bg-amber-500 border-amber-500 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500'}`}>備選景點</button>
+                                            <button type="button" onClick={() => setFormData({...formData, type: 'main'})} className={`flex-1 py-2.5 rounded-xl text-sm font-black border-2 transition-all ${formData.type === 'main' ? 'bg-slate-800 border-slate-800 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500'}`}>主要行程</button>
+                                            <button type="button" onClick={() => setFormData({...formData, type: 'backup'})} className={`flex-1 py-2.5 rounded-xl text-sm font-black border-2 transition-all ${formData.type === 'backup' ? 'bg-amber-500 border-amber-500 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500'}`}>備選景點</button>
                                         </div>
                                         <div className="flex gap-2">
                                             {Object.entries(SUB_TYPES).map(([key, info]) => (
-                                                <button type="button" key={key} onClick={() => setFormData({...formData, subType: key})} className={`flex-1 py-2 rounded-xl text-[11px] font-black border-2 flex items-center justify-center gap-1 transition-all ${formData.subType === key ? `${info.badgeBg} ${info.border} ${info.badgeText} shadow-sm` : 'bg-white border-slate-100 text-slate-400'}`}>
+                                                <button type="button" key={key} onClick={() => setFormData({...formData, subType: key})} className={`flex-1 py-2 rounded-xl text-xs font-black border-2 flex items-center justify-center gap-1 transition-all ${formData.subType === key ? `${info.badgeBg} ${info.border} ${info.badgeText} shadow-sm` : 'bg-white border-slate-100 text-slate-400'}`}>
                                                     <Icon name={info.icon} className="w-3.5 h-3.5" /> {info.label}
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 mb-1 block uppercase">行程內容</label>
-                                        <input type="text" required placeholder="例：午餐：燒肉神社" value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})} className="w-full border-2 border-slate-100 rounded-xl p-2.5 font-bold outline-none focus:border-blue-500" />
+                                        <label className="text-xs font-black text-slate-400 mb-1 block uppercase">行程內容</label>
+                                        <input type="text" required placeholder="例：午餐：燒肉神社" value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})} className="w-full border-2 border-slate-100 rounded-xl p-2.5 font-bold outline-none focus:border-blue-500 text-base" />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 mb-1 block uppercase">地點名稱</label>
-                                        <input type="text" placeholder="例：燒肉神社 那霸店" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full border-2 border-slate-100 rounded-xl p-2.5 font-bold outline-none focus:border-blue-500" />
+                                        <label className="text-xs font-black text-slate-400 mb-1 block uppercase">地點名稱</label>
+                                        <input type="text" placeholder="例：燒肉神社 那霸店" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full border-2 border-slate-100 rounded-xl p-2.5 font-bold outline-none focus:border-blue-500 text-base" />
                                     </div>
                                     <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100">
-                                        <label className="text-[10px] font-black text-blue-600 mb-2 block uppercase">Google Map 連結 (自動填座標)</label>
-                                        <input type="url" placeholder="貼上網址..." value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} onBlur={handleUrlBlur} className="w-full border-2 border-slate-200 rounded-xl p-2.5 bg-white mb-3 text-xs outline-none focus:border-blue-300" />
+                                        <label className="text-xs font-black text-blue-600 mb-2 block uppercase">Google Map 連結 (自動填座標)</label>
+                                        <input type="url" placeholder="貼上網址..." value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} onBlur={handleUrlBlur} className="w-full border-2 border-slate-200 rounded-xl p-2.5 bg-white mb-3 text-sm outline-none focus:border-blue-300" />
                                         <div className="grid grid-cols-2 gap-3">
-                                            <input type="number" step="any" value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} className="w-full border-2 border-slate-200 rounded-lg p-2 text-xs font-mono" placeholder="Lat 緯度" />
-                                            <input type="number" step="any" value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} className="w-full border-2 border-slate-200 rounded-lg p-2 text-xs font-mono" placeholder="Lng 經度" />
+                                            <input type="number" step="any" value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} className="w-full border-2 border-slate-200 rounded-lg p-2 text-sm font-mono" placeholder="Lat 緯度" />
+                                            <input type="number" step="any" value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} className="w-full border-2 border-slate-200 rounded-lg p-2 text-sm font-mono" placeholder="Lng 經度" />
                                         </div>
                                     </div>
-                                    <button type="submit" className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2 mt-4">
+                                    <button type="submit" className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2 mt-4 text-lg">
                                         <Icon name="save" /> 儲存行程
                                     </button>
                                 </form>
