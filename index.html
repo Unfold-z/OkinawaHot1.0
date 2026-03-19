@@ -111,45 +111,52 @@
                 const init = async () => {
                     try {
                         const confStr = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
-                        if (!confStr) throw new Error("No config");
+                        if (!confStr) {
+                            setIsLocalMode(true);
+                            setItinerary(INITIAL_ITINERARY);
+                            setLoading(false);
+                            return;
+                        }
+                        
                         const config = JSON.parse(confStr);
                         const app = firebase.apps.length > 0 ? firebase.app() : firebase.initializeApp(config);
                         const auth = firebase.auth();
                         
-                        // Auth Setup
-                        await new Promise((resolve) => {
-                            auth.onAuthStateChanged(async (u) => {
-                                if (!u) {
-                                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                                        await auth.signInWithCustomToken(__initial_auth_token).catch(() => auth.signInAnonymously());
-                                    } else {
-                                        await auth.signInAnonymously();
-                                    }
-                                }
-                                resolve();
-                            });
-                        });
+                        // 修復核心：嚴格要求先完成驗證，再向資料庫拿資料
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            try {
+                                await auth.signInWithCustomToken(__initial_auth_token);
+                            } catch (e) {
+                                await auth.signInAnonymously();
+                            }
+                        } else {
+                            await auth.signInAnonymously();
+                        }
 
                         const db = firebase.firestore();
                         const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary');
                         
-                        // 修正：確實將參數名稱改為 snapshot，避免 ReferenceError
                         unsubscribe = col.onSnapshot(snapshot => {
                             const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
                             if (data.length > 0) {
                                 setItinerary(data.sort((a, b) => a.day !== b.day ? a.day - b.day : a.time.localeCompare(b.time)));
                             } else {
                                 INITIAL_ITINERARY.forEach(item => {
-                                    // 將 id 拆離，確保文件本身乾淨
                                     const { id, ...itemData } = item;
                                     col.doc(id).set(itemData);
                                 });
                             }
+                            setIsLocalMode(false);
                             setLoading(false);
-                        }, err => { console.error(err); setIsLocalMode(true); setLoading(false); });
+                        }, err => { 
+                            console.error("Firestore 同步權限錯誤:", err); 
+                            setIsLocalMode(true); 
+                            setItinerary(INITIAL_ITINERARY);
+                            setLoading(false); 
+                        });
                         
                     } catch (e) {
-                        console.warn("Falling back to local mode", e);
+                        console.warn("無法啟動 Firebase，降級為本地模式", e);
                         setIsLocalMode(true);
                         setItinerary(INITIAL_ITINERARY);
                         setLoading(false);
