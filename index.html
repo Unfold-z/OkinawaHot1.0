@@ -126,7 +126,7 @@
         };
 
         const callGeminiWithBackoff = async (prompt, maxRetries = 5) => {
-            const apiKey = ""; // GitHub Pages 環境如需 AI 功能，請在此填入 Gemini API Key
+            const apiKey = "AIzaSyDrFvEdYOXzvYtJjUGGuC6wPhY60B8_9w0"; // GitHub Pages 環境如需 AI 功能，請在此填入 Gemini API Key
             if (!apiKey) return "提示：在此環境中未配置 AI API 金鑰。請手動填寫行程內容。";
             
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
