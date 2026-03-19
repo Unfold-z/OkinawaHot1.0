@@ -157,7 +157,7 @@
                 let unsubscribe;
                 const init = async () => {
                     // 防呆機制：如果還沒填寫 API 金鑰，直接切換為離線模式
-                    if (!firebaseConfig.apiKey || AIzaSyDEwxQqGnGcyr-480VFTbsE1FZDcf3neFo("請替換成您的")) {
+                    if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("請替換成您的")) {
                         console.warn("⚠️ 尚未設定 Firebase Config，目前使用本地離線模式 (重整後資料會消失)");
                         setIsLocalMode(true);
                         setItinerary(INITIAL_ITINERARY);
