@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>沖繩 6 日自駕之旅 - 終極升級版</title>
+    <title>沖繩自駕之旅 - 互動地圖</title>
+    <!-- 引入外部資源 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -11,32 +12,46 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Firebase Compat SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <style>
+        /* 鎖定全螢幕，採用 App 式佈局 */
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background-color: #f8fafc; }
         #root { height: 100%; width: 100%; display: flex; flex-direction: column; overflow: hidden; }
+        
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 自訂捲軸 */
         .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* 地圖樣式覆寫 */
         .leaflet-div-icon { background: transparent; border: none; }
         .leaflet-popup-content-wrapper { border-radius: 16px; padding: 0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); overflow: hidden; }
         .leaflet-popup-content { margin: 0; }
+        
+        /* 地圖標記懸停動畫 */
         .marker-anim { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .marker-anim:hover { transform: scale(1.2); z-index: 1000 !important; }
+
+        /* 導航路線動畫 */
         .route-line { stroke-dasharray: 15, 15; animation: dash 30s linear infinite; }
         @keyframes dash { to { stroke-dashoffset: -1000; } }
+
+        /* 防止行動端點擊閃爍與縮放 */
         * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
         input, select, textarea { font-size: 16px !important; }
         .route-checkbox:checked + div { border-color: transparent; }
+        
+        /* 動畫 */
         @keyframes spin { 100% { transform: rotate(360deg); } }
         .icon-spin { animation: spin 1s linear infinite; }
         .drag-over { border: 2px dashed #3b82f6 !important; opacity: 0.7; transform: scale(0.98); }
-        /* Toast 彈窗動畫 */
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .toast-enter { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     </style>
@@ -48,11 +63,23 @@
         const { useState, useEffect, useRef, useCallback } = React;
 
         // ==========================================
-        // 1. 常數與設定 (Constants & Config)
+        // 1. ⚠️【重要設定】請在此填入您的 Firebase 金鑰
         // ==========================================
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'okinawa-trip-2025';
+        const firebaseConfig = {
+            apiKey: "AIzaSyDEwxQqGnGcyr-480VFTbsE1FZDcf3neFo",
+            authDomain: "okinawahot-174b8.firebaseapp.com",
+            projectId: "okinawahot-174b8",
+            storageBucket: "okinawahot-174b8.firebasestorage.app",
+            messagingSenderId: "502127203745",
+            appId: "1:502127203745:web:7935f2cf50659025aca7e0"
+        };
+
+        const TRIP_ID = 'okinawa-trip-2026'; // 您專屬的資料庫識別碼
         const MEMBERS = ["志展", "盧志", "大維", "禹康", "懿軒"];
         
+        // ==========================================
+        // 基本設定與常數
+        // ==========================================
         const SUB_TYPES = {
             attraction: { label: '景點', color: '#3b82f6', icon: 'camera', badgeBg: 'bg-blue-100', badgeText: 'text-blue-700', border: 'border-blue-500' },
             food: { label: '食物', color: '#ef4444', icon: 'utensils', badgeBg: 'bg-red-100', badgeText: 'text-red-700', border: 'border-red-500' },
@@ -91,50 +118,62 @@
             if (!visible) return null;
             return (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[4000] toast-enter">
-                    <div className="bg-slate-800 text-white px-5 py-3 rounded-full shadow-2xl flex items-center gap-2 font-bold text-sm">
+                    <div className="bg-slate-800 text-white px-5 py-3 rounded-full shadow-2xl flex items-center gap-2 font-bold text-sm whitespace-nowrap">
                         <Icon name="check-circle-2" className="w-5 h-5 text-green-400" /> {message}
                     </div>
                 </div>
             );
         };
 
+        const callGeminiWithBackoff = async (prompt, maxRetries = 5) => {
+            const apiKey = ""; // GitHub Pages 環境如需 AI 功能，請在此填入 Gemini API Key
+            if (!apiKey) return "提示：在此環境中未配置 AI API 金鑰。請手動填寫行程內容。";
+            
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = { contents: [{ parts: [{ text: prompt }] }] };
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) throw new Error(`HTTP error!`);
+                    const data = await response.json();
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text || "無法產生內容。";
+                } catch (error) {
+                    if (i === maxRetries - 1) return "API 呼叫失敗，請稍後再試。";
+                    await new Promise(res => setTimeout(res, Math.pow(2, i) * 1000));
+                }
+            }
+        };
+
         // ==========================================
-        // 3. 自訂 Hooks (Custom Logic)
+        // 3. 自訂 Hooks (Firestore 同步邏輯)
         // ==========================================
         const useFirebase = () => {
             const [itinerary, setItinerary] = useState([]);
-            const [isLocalMode, setIsLocalMode] = useState(false);
+            const [isLocalMode, setIsLocalMode] = useState(true);
             const [loading, setLoading] = useState(true);
 
             useEffect(() => {
                 let unsubscribe;
                 const init = async () => {
+                    // 防呆機制：如果還沒填寫 API 金鑰，直接切換為離線模式
+                    if (!firebaseConfig.apiKey || AIzaSyDEwxQqGnGcyr-480VFTbsE1FZDcf3neFo("請替換成您的")) {
+                        console.warn("⚠️ 尚未設定 Firebase Config，目前使用本地離線模式 (重整後資料會消失)");
+                        setIsLocalMode(true);
+                        setItinerary(INITIAL_ITINERARY);
+                        setLoading(false);
+                        return;
+                    }
+
                     try {
-                        const confStr = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
-                        if (!confStr) {
-                            setIsLocalMode(true);
-                            setItinerary(INITIAL_ITINERARY);
-                            setLoading(false);
-                            return;
-                        }
-                        
-                        const config = JSON.parse(confStr);
-                        const app = firebase.apps.length > 0 ? firebase.app() : firebase.initializeApp(config);
+                        const app = firebase.apps.length > 0 ? firebase.app() : firebase.initializeApp(firebaseConfig);
                         const auth = firebase.auth();
                         
-                        // 修復核心：嚴格要求先完成驗證，再向資料庫拿資料
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            try {
-                                await auth.signInWithCustomToken(__initial_auth_token);
-                            } catch (e) {
-                                await auth.signInAnonymously();
-                            }
-                        } else {
-                            await auth.signInAnonymously();
-                        }
+                        // 等待匿名登入完成
+                        await auth.signInAnonymously();
 
                         const db = firebase.firestore();
-                        const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary');
+                        const col = db.collection('trips').doc(TRIP_ID).collection('itinerary');
                         
                         unsubscribe = col.onSnapshot(snapshot => {
                             const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
@@ -149,7 +188,7 @@
                             setIsLocalMode(false);
                             setLoading(false);
                         }, err => { 
-                            console.error("Firestore 同步權限錯誤:", err); 
+                            console.error("Firestore 同步權限錯誤 (請檢查 Firestore Rules):", err); 
                             setIsLocalMode(true); 
                             setItinerary(INITIAL_ITINERARY);
                             setLoading(false); 
@@ -172,7 +211,7 @@
                     else setItinerary(p => [...p, { ...data, id: Date.now().toString() }].sort((a,b)=> a.day!==b.day ? a.day-b.day : a.time.localeCompare(b.time)));
                     return;
                 }
-                const col = firebase.firestore().collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary');
+                const col = firebase.firestore().collection('trips').doc(TRIP_ID).collection('itinerary');
                 if (isEdit) {
                     const { id, ...updateData } = data;
                     await col.doc(id).update(updateData);
@@ -183,7 +222,7 @@
 
             const deleteItem = async (id) => {
                 if (isLocalMode) { setItinerary(p => p.filter(i => i.id !== id)); return; }
-                await firebase.firestore().collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary').doc(id).delete();
+                await firebase.firestore().collection('trips').doc(TRIP_ID).collection('itinerary').doc(id).delete();
             };
 
             const batchUpdate = async (updates) => {
@@ -195,7 +234,7 @@
                     return;
                 }
                 const db = firebase.firestore();
-                const col = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('itinerary');
+                const col = db.collection('trips').doc(TRIP_ID).collection('itinerary');
                 const batch = db.batch();
                 updates.forEach(u => {
                     const { id, ...fields } = u;
@@ -208,7 +247,7 @@
         };
 
         // ==========================================
-        // 4. 模組化組件 (Modular Components)
+        // 4. 模組化 UI 組件 (Modular Components)
         // ==========================================
 
         const Header = ({ isLocalMode, viewMode, setViewMode, onOpenModal }) => (
@@ -217,8 +256,10 @@
                     <div className="bg-blue-600 p-1.5 md:p-2 rounded-lg shadow-inner hidden md:block"><Icon name="map" className="w-4 h-4 md:w-5 md:h-5" /></div>
                     <div>
                         <h1 className="text-base md:text-lg font-black tracking-tight leading-none">沖繩旅遊地圖</h1>
-                        <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 flex gap-1 md:gap-2">
-                            <span>{isLocalMode ? 'Offline Mode' : 'Real-time Sync'}</span>
+                        <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest mt-1 flex gap-1 md:gap-2">
+                            <span className={isLocalMode ? 'text-amber-400' : 'text-emerald-400'}>
+                                {isLocalMode ? '● Offline Mode (未連線資料庫)' : '● Real-time Sync (雲端同步中)'}
+                            </span>
                         </p>
                     </div>
                 </div>
@@ -244,7 +285,7 @@
             const markersRef = useRef({});
             const polylinesRef = useRef([]);
 
-            // Init Map
+            // 初始化地圖
             useEffect(() => {
                 if (!leafletMap.current && mapRef.current) {
                     leafletMap.current = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: true }).setView([26.4, 127.8], 9);
@@ -252,7 +293,7 @@
                 }
             }, []);
 
-            // Draw Markers & Fetch Routes
+            // 繪製標記與路線
             useEffect(() => {
                 if (!leafletMap.current) return;
                 let isActive = true;
@@ -298,7 +339,6 @@
 
                         if (latlngs.length < 2) return { day, metrics: null };
 
-                        // 並行取得 OSRM 路線資料
                         try {
                             const coordsStr = latlngs.map(ll => `${ll[1]},${ll[0]}`).join(';');
                             const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`);
@@ -327,7 +367,6 @@
                     });
                     setRouteMetrics(newMetrics);
 
-                    // Auto-fit Bounds (自動聚焦)
                     if (allLatLngs.length > 0) {
                         const b = L.latLngBounds(allLatLngs);
                         leafletMap.current.fitBounds(b, { padding: [50, 50], maxZoom: 15 });
@@ -337,10 +376,10 @@
                 return () => isActive = false;
             }, [itinerary, viewMode, activeDay, routeDays]);
 
-            // Handle Map Resizing from Drag
+            // 監聽拖曳改變高度
             useEffect(() => { if (leafletMap.current) leafletMap.current.invalidateSize(); }, [mapHeightVH, isMobile]);
 
-            // Focus Map from List Click
+            // 點擊列表時聚焦地圖
             useEffect(() => {
                 if (selectedLocation && leafletMap.current) {
                     leafletMap.current.setView([selectedLocation.lat, selectedLocation.lng], 16, { animate: true });
@@ -378,8 +417,20 @@
 
         const Sidebar = ({ itinerary, viewMode, activeDay, setActiveDay, routeDays, toggleRouteDay, onEdit, onDelete, onShiftTime, onDragDrop, onFocus, routeMetrics, showToast }) => {
             const [draggedId, setDraggedId] = useState(null);
+            const [isGettingAdvice, setIsGettingAdvice] = useState(false);
+            const [aiAdviceMap, setAiAdviceMap] = useState({});
 
-            // Export logic
+            const handleGetDailyAdvice = async () => {
+                const dayItems = itinerary.filter(i => i.day === activeDay).sort((a,b) => a.time.localeCompare(b.time));
+                if (dayItems.length === 0) return;
+                setIsGettingAdvice(true);
+                const itineraryText = dayItems.map(i => `${i.time} - ${i.location || i.content}`).join('\n');
+                const prompt = `你是一個專業的沖繩旅遊顧問。這是我規劃的第 ${activeDay} 天行程：\n${itineraryText}\n\n請用繁體中文給出一段約 50 字以內的簡短建議。指出行程順暢度、或該地點隱藏亮點。`;
+                const advice = await callGeminiWithBackoff(prompt);
+                setAiAdviceMap(prev => ({ ...prev, [activeDay]: advice }));
+                setIsGettingAdvice(false);
+            };
+
             const handleExportText = () => {
                 const items = itinerary.filter(i => i.day === activeDay).sort((a,b)=>a.time.localeCompare(b.time));
                 let txt = `🚗 沖繩自駕 Day ${activeDay} 行程\n`;
@@ -407,11 +458,24 @@
                                 ))}
                             </div>
                             
-                            {/* 工具列 */}
                             <div className="px-3 md:px-4 pt-3 md:pt-4 flex gap-2">
                                 <button onClick={handleExportText} className="flex-1 bg-white border border-slate-200 text-slate-600 text-[10px] md:text-xs font-bold py-2 rounded-lg shadow-sm hover:bg-slate-50 active:scale-95 flex items-center justify-center gap-1.5"><Icon name="copy" className="w-3.5 h-3.5" />複製行程</button>
                                 <button onClick={handleExportNav} className="flex-1 bg-white border border-slate-200 text-slate-600 text-[10px] md:text-xs font-bold py-2 rounded-lg shadow-sm hover:bg-slate-50 active:scale-95 flex items-center justify-center gap-1.5"><Icon name="navigation" className="w-3.5 h-3.5 text-blue-500" />多點導航</button>
                             </div>
+
+                            {itinerary.filter(i => i.day === activeDay).length > 0 && (
+                                <div className="px-3 pt-3 md:px-4 md:pt-4 pb-0 z-10 bg-slate-50">
+                                    <button onClick={handleGetDailyAdvice} disabled={isGettingAdvice} className="w-full bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 text-indigo-700 text-[11px] md:text-xs font-bold py-2 rounded-xl shadow-sm hover:shadow active:scale-95 transition-all flex items-center justify-center gap-1.5">
+                                        {isGettingAdvice ? <Icon name="loader-2" className="w-3.5 h-3.5 md:w-4 md:h-4 icon-spin" /> : "✨ AI 幫我看看今天行程"}
+                                    </button>
+                                    {aiAdviceMap[activeDay] && (
+                                        <div className="mt-2.5 p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-[11px] md:text-xs text-slate-700 leading-relaxed shadow-inner relative animate-in fade-in slide-in-from-top-2">
+                                            <strong className="text-indigo-800 block mb-1"><span className="text-xs md:text-[14px]">💡</span> 行程建議：</strong>
+                                            {aiAdviceMap[activeDay]}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3 md:space-y-4 custom-scrollbar bg-slate-50 pb-10">
                                 <p className="text-[9px] md:text-[10px] text-center text-slate-400 font-bold mb-1.5 md:mb-2">💡 提示：按住卡片可上下拖曳排序</p>
@@ -502,12 +566,10 @@
             const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
             const [mapHeightVH, setMapHeightVH] = useState(40);
             
-            // UI States
             const [toastMsg, setToastMsg] = useState({ msg: '', show: false });
             const [selectedLocation, setSelectedLocation] = useState(null);
             const [routeMetrics, setRouteMetrics] = useState({});
             
-            // Modal States
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [editingItem, setEditingItem] = useState(null);
             const [urlWarning, setUrlWarning] = useState("");
@@ -520,10 +582,7 @@
                 return () => window.removeEventListener('resize', handleResize);
             }, []);
 
-            const showToast = (msg) => {
-                setToastMsg({ msg, show: true });
-                setTimeout(() => setToastMsg({ msg: '', show: false }), 3000);
-            };
+            const showToast = (msg) => { setToastMsg({ msg, show: true }); setTimeout(() => setToastMsg({ msg: '', show: false }), 3000); };
 
             const handleMapDragStart = (e) => {
                 if (e.type === 'mousedown' && e.button !== 0) return;
@@ -563,7 +622,7 @@
                     updates.push({ id: item.id, time: `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` });
                 }
                 await batchUpdate(updates);
-                showToast("✅ 已順延後續行程時間");
+                showToast(`✅ 已將此行程與後續行程順延 ${shiftMinutes} 分鐘`);
             };
 
             const handleGenerateContent = async () => {
