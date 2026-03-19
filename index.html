@@ -285,11 +285,19 @@
             const markersRef = useRef({});
             const polylinesRef = useRef([]);
 
-            // 初始化地圖
+           // 初始化地圖
             useEffect(() => {
                 if (!leafletMap.current && mapRef.current) {
                     leafletMap.current = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: true }).setView([26.4, 127.8], 9);
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(leafletMap.current);
+                    
+                    // 【修復破圖】加入 ResizeObserver 來監控容器大小變化，確保地圖隨時保持正確渲染
+                    const resizeObserver = new ResizeObserver(() => {
+                        if (leafletMap.current) {
+                            leafletMap.current.invalidateSize();
+                        }
+                    });
+                    resizeObserver.observe(mapRef.current);
                 }
             }, []);
 
@@ -323,7 +331,7 @@
                                 ? `<div class="marker-anim flex items-center justify-center text-white font-bold" style="background-color: ${DAY_COLORS[day]}; width: 20px; height: 20px; border: 2px solid ${borderColor}; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.4); font-size: 10px;">${index + 1}</div>`
                                 : `<div class="marker-anim" style="background-color: ${sub.color}; width: 12px; height: 12px; border: 2px solid ${borderColor}; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.4);"></div>`;
                             
-                            const iconSize = viewMode === 'route' ? [20, 20] : [12, 12];
+                            const iconSize = viewMode === 'route' ? [20, 20] : [20, 20];
                             const icon = L.divIcon({ html, className: '', iconSize, iconAnchor: [iconSize[0]/2, iconSize[1]/2] });
 
                             const marker = L.marker([item.lat, item.lng], { icon }).addTo(leafletMap.current).bindPopup(`
