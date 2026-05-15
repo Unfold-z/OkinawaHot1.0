@@ -189,7 +189,7 @@
         }
 
         /* Smooth scrolling on iOS */
-        .scroll{-webkit-overflow-scrolling:touch;}
+        .scroll{-webkit-overflow-scrolling:touch;touch-action:pan-y;}
 
         input,select,textarea{font-size:16px!important;}
 
@@ -263,9 +263,10 @@ function settle(expenses, members) {
     members.forEach(m => balance[m] = 0);
 
     expenses.forEach(exp => {
+        if (!exp.forWhom || exp.forWhom.length === 0) return; // guard: skip invalid records
         const perPerson = exp.amount / exp.forWhom.length;
-        balance[exp.paidBy] += exp.amount;
-        exp.forWhom.forEach(m => { balance[m] -= perPerson; });
+        balance[exp.paidBy] = (balance[exp.paidBy] || 0) + Number(exp.amount);
+        exp.forWhom.forEach(m => { balance[m] = (balance[m] || 0) - perPerson; });
     });
 
     const creditors = [], debtors = [];
@@ -408,7 +409,7 @@ const useFirebase = () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // MAP AREA (with parking + weather layers)
 // ─────────────────────────────────────────────────────────────────────────────
-const MapArea = memo(({itinerary, viewMode, activeDay, routeDays, focusTarget, onMetrics, isMobile, mapH}) => {
+const MapArea = memo(({itinerary, viewMode, activeDay, routeDays, focusTarget, onMetrics, isMobile, mapH, visible}) => {
     const mapEl    = useRef(null);
     const leaflet  = useRef(null);
     const markers  = useRef({});
@@ -416,8 +417,6 @@ const MapArea = memo(({itinerary, viewMode, activeDay, routeDays, focusTarget, o
     const observer = useRef(null);
     const lastKey  = useRef('');
     // Layer refs
-    const parkingLayer  = useRef(null);
-    const weatherLayer  = useRef(null);
     const parkingMarkers = useRef([]);
     const weatherMarkers = useRef([]);
 
@@ -438,6 +437,25 @@ const MapArea = memo(({itinerary, viewMode, activeDay, routeDays, focusTarget, o
 
     useEffect(() => { setTimeout(() => leaflet.current?.invalidateSize(), 50); }, [mapH]);
 
+    // 從其他分頁切回地圖頁時，強制重繪並 fitBounds 到當前 activeDay
+    useEffect(() => {
+        if (!visible || !leaflet.current) return;
+        setTimeout(() => {
+            leaflet.current.invalidateSize();
+            lastKey.current = ''; // 清掉 cache，強制下次 effect 重跑
+            // 直接 fitBounds 到當前顯示的天數
+            const days = viewMode === 'route' ? routeDays : [activeDay];
+            const pts = itinerary
+                .filter(i => days.includes(i.day) && i.lat && i.lng)
+                .map(i => [i.lat, i.lng]);
+            if (pts.length > 0) {
+                leaflet.current.fitBounds(L.latLngBounds(pts), {
+                    padding: [50, 50], maxZoom: pts.length === 1 ? 14 : 13, animate: false
+                });
+            }
+        }, 100);
+    }, [visible, viewMode, activeDay, routeDays]);
+
     // ── PARKING LAYER ──
     const toggleParking = useCallback(async () => {
         if (!leaflet.current) return;
@@ -455,7 +473,7 @@ const MapArea = memo(({itinerary, viewMode, activeDay, routeDays, focusTarget, o
         try {
             const bounds = leaflet.current.getBounds();
             const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
-            const query = `[out:json][timeout:15];(node["amenity"="parking"](${bbox});way["amenity"="parking"](${bbox}););out center 60;`;
+            const query = `[out:json][timeout:20];(node["amenity"="parking"](${bbox});way["amenity"="parking"](${bbox}););out center 60;`;
             const r = await fetch('https://overpass-api.de/api/interpreter', {
                 method:'POST', body: 'data=' + encodeURIComponent(query),
                 signal: AbortSignal.timeout(18000)
@@ -604,11 +622,12 @@ const MapArea = memo(({itinerary, viewMode, activeDay, routeDays, focusTarget, o
 
         const run = async () => {
             const newMetrics = {};
-            await Promise.all(days.map(async day => {
+
+            // ── Step 1: 同步畫 markers，立刻 fitBounds（不等 routing）──
+            days.forEach(day => {
                 const items = itinerary.filter(i=>i.day===day).sort((a,b)=>a.time.localeCompare(b.time));
                 const valid = items.filter(i=>i.lat&&i.lng);
                 if (!valid.length) return;
-
                 valid.forEach((item, idx) => {
                     const sub = SUB_TYPES[item.subType] || SUB_TYPES.attraction;
                     const bw  = item.type==='backup' ? '#f59e0b' : '#fff';
@@ -626,7 +645,21 @@ const MapArea = memo(({itinerary, viewMode, activeDay, routeDays, focusTarget, o
                     markers.current[item.id] = m;
                     allLL.push([item.lat,item.lng]);
                 });
+            });
 
+            // fitBounds 立刻執行，不等 routing
+            if (allLL.length > 0) {
+                leaflet.current.fitBounds(L.latLngBounds(allLL), {
+                    padding: [50, 50],
+                    maxZoom: allLL.length === 1 ? 14 : 13,
+                    animate: true
+                });
+            }
+
+            // ── Step 2: 非同步跑 routing，只更新 polyline，不再移動地圖 ──
+            await Promise.all(days.map(async day => {
+                const items = itinerary.filter(i=>i.day===day).sort((a,b)=>a.time.localeCompare(b.time));
+                const valid = items.filter(i=>i.lat&&i.lng);
                 if (valid.length < 2) return;
                 try {
                     const coords = valid.map(i=>`${i.lng},${i.lat}`).join(';');
@@ -644,7 +677,6 @@ const MapArea = memo(({itinerary, viewMode, activeDay, routeDays, focusTarget, o
             }));
             if (cancelled) return;
             onMetrics(newMetrics);
-            if (allLL.length>0) leaflet.current.fitBounds(L.latLngBounds(allLL),{padding:[50,50],maxZoom:15});
         };
         run();
         return () => { cancelled=true; };
@@ -657,7 +689,7 @@ const MapArea = memo(({itinerary, viewMode, activeDay, routeDays, focusTarget, o
     }, [focusTarget]);
 
     return (
-        <div style={{position:'relative', flex:isMobile?'none':'1', height:isMobile?`${mapH}vh`:'100%'}}>
+        <div style={{position:'relative', flex: (isMobile && mapH===100) ? '1' : isMobile ? 'none' : '1', height: (isMobile && mapH===100) ? '100%' : isMobile ? `${mapH}vh` : '100%'}}>
             <div ref={mapEl} style={{position:'absolute', inset:0}} />
 
             {/* Layer controls — top-right desktop, bottom-left mobile (above resize handle) */}
@@ -711,6 +743,7 @@ const MapArea = memo(({itinerary, viewMode, activeDay, routeDays, focusTarget, o
 }, (prev, next) =>
     prev.viewMode===next.viewMode && prev.activeDay===next.activeDay &&
     prev.mapH===next.mapH && prev.isMobile===next.isMobile &&
+    prev.visible===next.visible &&
     JSON.stringify(prev.routeDays)===JSON.stringify(next.routeDays) &&
     JSON.stringify(prev.focusTarget)===JSON.stringify(next.focusTarget) &&
     prev.itinerary.length===next.itinerary.length &&
@@ -729,7 +762,7 @@ const TripCard = memo(({item, onEdit, onDelete, onShift, onFocus, onDragStart, o
             onDragLeave={e=>e.currentTarget.classList.remove('drag-over')}
             onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drag-over');onDrop();}}
             onTouchStart={onTouchStart}
-            onTouchMove={e=>{if(onTouchMove)onTouchMove(e,item.id);}}
+            onTouchMove={e=>{if(onTouchMove)onTouchMove(e,item.id);}} // passive by default
             onTouchEnd={onTouchEnd}
             onClick={onFocus}
             style={{WebkitUserSelect:'none',userSelect:'none'}}>
@@ -803,7 +836,8 @@ const ItinerarySidebar = ({itinerary, viewMode, activeDay, setActiveDay, routeDa
 
     const handleTouchMove = useCallback((e, itemId) => {
         if (!touchDragRef.current.active) return;
-        e.preventDefault();
+        // Only preventDefault when actively dragging — otherwise browser scroll works
+        if (e.cancelable) e.preventDefault();
         touchDragRef.current.currentY = e.touches[0].clientY;
         touchDragRef.current.targetId = itemId;
     }, []);
@@ -837,15 +871,15 @@ const ItinerarySidebar = ({itinerary, viewMode, activeDay, setActiveDay, routeDa
     };
 
     return (
-        <div style={{width:'100%',flex:1,minHeight:0,display:'flex',flexDirection:'column',background:'var(--surface2)',overflow:'hidden'}}>
+        <div style={{width:'100%',display:'flex',flexDirection:'column',background:'var(--surface2)'}}>
             {viewMode==='itinerary' ? (<>
-                <div style={{padding:'10px 12px',borderBottom:'1px solid var(--border)',background:'white',display:'flex',gap:6,alignItems:'center',overflowX:'auto'}} className="scroll">
+                <div style={{padding:'10px 12px',borderBottom:'1px solid var(--border)',background:'white',display:'flex',gap:6,alignItems:'center',flexWrap:'wrap',position:'sticky',top:0,zIndex:9}}>
                     {[1,2,3,4,5,6].map(d=><button key={d} className={`day-tab ${activeDay===d?'active':'inactive'}`} onClick={()=>setActiveDay(d)}>D{d}</button>)}
                     <div style={{flex:1,minWidth:6}}/>
                     <button className="btn-ghost" onClick={handleCopy} style={{flexShrink:0}}><Icon name="copy" size={12}/>複製</button>
                     <button className="btn-ghost" onClick={handleNav}  style={{flexShrink:0}}><Icon name="navigation" size={12} color="#0ea5e9"/>導航</button>
                 </div>
-                <div className="scroll" style={{flex:1,minHeight:0,overflowY:'auto',padding:'10px 10px 24px',display:'flex',flexDirection:'column',gap:8,minHeight:0}}>
+                <div style={{padding:'10px 10px 24px',display:'flex',flexDirection:'column',gap:8}}>
                     {dayItems.length===0 ? (
                         <div style={{textAlign:'center',padding:'50px 20px',color:'var(--text-faint)'}}>
                             <Icon name="calendar-plus" size={36} color="var(--text-faint)"/>
@@ -882,7 +916,7 @@ const ItinerarySidebar = ({itinerary, viewMode, activeDay, setActiveDay, routeDa
                         ))}
                     </div>
                 </div>
-                <div className="scroll" style={{flex:1,minHeight:0,overflowY:'auto',padding:'12px 13px 24px',display:'flex',flexDirection:'column',gap:18}}>
+                <div style={{padding:'12px 13px 24px',display:'flex',flexDirection:'column',gap:18}}>
                     {routeDays.map(d=>{
                         const items=itinerary.filter(i=>i.day===d).sort((a,b)=>a.time.localeCompare(b.time));
                         if(!items.length) return null;
@@ -1328,6 +1362,7 @@ const App = () => {
     const {itinerary, expenses, isLocal, loading, saveItem, deleteItem, batchUpdate, saveExpense, deleteExpense} = useFirebase();
     const [mainTab,   setMainTab]   = useState('map');    // 'map' | 'itinerary' | 'expense'
     const [viewMode,  setViewMode]  = useState('itinerary');
+    const [mobileViewMode, setMobileViewMode] = useState('itinerary'); // 手機行程頁獨立 state
     const [activeDay, setActiveDay] = useState(1);
     const [routeDays, setRouteDays] = useState([1,2,3,4,5,6]);
     const [isMobile,  setIsMobile]  = useState(window.innerWidth < 768);
@@ -1460,19 +1495,35 @@ const App = () => {
                 <>
                     {/* 地圖頁 */}
                     <div style={{flex:1,display:mainTab==='map'?'flex':'none',flexDirection:'column',overflow:'hidden',minHeight:0,isolation:'isolate',paddingBottom:'calc(var(--nav-h) + var(--safe-bottom))'}}>
-                        <MapArea itinerary={itinerary} viewMode="route" activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={true} mapH={100}/>
+                        <MapArea itinerary={itinerary} viewMode={mobileViewMode} activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={true} mapH={100} visible={mainTab==='map'}/>
                     </div>
 
-                    {/* 行程頁 */}
-                    <div style={{flex:1,minHeight:0,display:mainTab==='itinerary'?'flex':'none',flexDirection:'column',overflow:'hidden'}}>
-                        {/* sub-tab: 單日 / 路線 */}
-                        <div style={{background:'white',borderBottom:'1px solid var(--border)',padding:'8px 12px',display:'flex',gap:6,alignItems:'center',flexShrink:0}}>
+                    {/* 行程頁 — 整頁滾動，無高度限制 */}
+                    <div style={{
+                        display: mainTab==='itinerary' ? 'block' : 'none',
+                        overflowY: 'auto',
+                        WebkitOverflowScrolling: 'touch',
+                        touchAction: 'pan-y',
+                        flex: 1,
+                        background: 'var(--surface2)',
+                        paddingBottom: 'calc(var(--nav-h) + var(--safe-bottom) + 16px)'
+                    }}>
+                        {/* 單日 / 路線 切換 */}
+                        <div style={{background:'white',borderBottom:'1px solid var(--border)',padding:'8px 12px',display:'flex',gap:6,alignItems:'center',position:'sticky',top:0,zIndex:10}}>
                             <div className="view-toggle" style={{background:'var(--bg)'}}>
-                                <button className={`view-btn ${viewMode==='itinerary'?'active':''}`} onClick={()=>setViewMode('itinerary')} style={{color:viewMode==='itinerary'?'var(--text)':'var(--text-muted)'}}><Icon name="list" size={13}/>單日</button>
-                                <button className={`view-btn ${viewMode==='route'?'active':''}`} onClick={()=>setViewMode('route')} style={{color:viewMode==='route'?'var(--text)':'var(--text-muted)'}}><Icon name="route" size={13}/>路線</button>
+                                <button className={`view-btn ${mobileViewMode==='itinerary'?'active':''}`}
+                                    onClick={()=>setMobileViewMode('itinerary')}
+                                    style={{color:mobileViewMode==='itinerary'?'var(--text)':'var(--text-muted)'}}>
+                                    <Icon name="list" size={13}/>單日
+                                </button>
+                                <button className={`view-btn ${mobileViewMode==='route'?'active':''}`}
+                                    onClick={()=>setMobileViewMode('route')}
+                                    style={{color:mobileViewMode==='route'?'var(--text)':'var(--text-muted)'}}>
+                                    <Icon name="route" size={13}/>路線
+                                </button>
                             </div>
                         </div>
-                        <ItinerarySidebar itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} setActiveDay={setActiveDay} routeDays={routeDays} toggleRouteDay={d=>setRouteDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d].sort())} onEdit={item=>{setEditing(item);setModalOpen(true);}} onDelete={deleteItem} onShift={handleShift} onDragDrop={handleDragDrop} onFocus={item=>{setFocus(item);setMainTab('map');}} metrics={metrics} showToast={showToast}/>
+                        <ItinerarySidebar itinerary={itinerary} viewMode={mobileViewMode} activeDay={activeDay} setActiveDay={setActiveDay} routeDays={routeDays} toggleRouteDay={d=>setRouteDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d].sort())} onEdit={item=>{setEditing(item);setModalOpen(true);}} onDelete={deleteItem} onShift={handleShift} onDragDrop={handleDragDrop} onFocus={item=>{setFocus(item);setMainTab('map');}} metrics={metrics} showToast={showToast}/>
                     </div>
 
                     {/* 費用頁 */}
@@ -1484,17 +1535,17 @@ const App = () => {
                 /* ── DESKTOP LAYOUT ── */
                 mainTab === 'map' ? (
                     <div style={{flex:1,display:'flex',flexDirection:'row',overflow:'hidden',minHeight:0}}>
-                        <div style={{width:'var(--sidebar-w)',flexShrink:0,display:'flex',flexDirection:'column',borderRight:'1px solid var(--border)',overflow:'hidden'}}>
+                        <div style={{width:'var(--sidebar-w)',flexShrink:0,display:'flex',flexDirection:'column',borderRight:'1px solid var(--border)',overflowY:'auto',overflowX:'hidden'}}>
                             <ItinerarySidebar itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} setActiveDay={setActiveDay} routeDays={routeDays} toggleRouteDay={d=>setRouteDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d].sort())} onEdit={item=>{setEditing(item);setModalOpen(true);}} onDelete={deleteItem} onShift={handleShift} onDragDrop={handleDragDrop} onFocus={setFocus} metrics={metrics} showToast={showToast}/>
                         </div>
-                        <MapArea itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={false} mapH={mapH}/>
+                        <MapArea itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={false} mapH={mapH} visible={true}/>
                     </div>
                 ) : (
                     <div style={{flex:1,display:'flex',flexDirection:'row',overflow:'hidden',minHeight:0}}>
-                        <div style={{width:'var(--sidebar-w)',flexShrink:0,borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                        <div style={{width:'var(--sidebar-w)',flexShrink:0,borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',overflowY:'auto',overflowX:'hidden'}}>
                             <ExpenseTab expenses={expenses} saveExpense={saveExpense} deleteExpense={deleteExpense} showToast={showToast}/>
                         </div>
-                        <MapArea itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={false} mapH={mapH}/>
+                        <MapArea itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={false} mapH={mapH} visible={true}/>
                     </div>
                 )
             )}
@@ -1575,7 +1626,7 @@ window.addEventListener('beforeinstallprompt', e => {
         if (deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
             const banner = document.createElement('div');
             banner.id = 'install-banner';
-            banner.style.cssText = 'position:fixed;bottom:calc(62px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#1e293b;color:white;padding:10px 18px;border-radius:99px;font-size:13px;font-weight:700;z-index:9998;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,.3);font-family:Noto Sans TC,sans-serif;white-space:nowrap;animation:fadeIn .3s ease;';
+            banner.style.cssText = 'position:fixed;bottom:calc(62px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#1e293b;color:white;padding:10px 18px;border-radius:99px;font-size:13px;font-weight:700;z-index:9998;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,.3);white-space:nowrap;animation:fadeIn .3s ease;';
             banner.innerHTML = '📲 加入主畫面離線使用 <button onclick="installApp()" style="background:white;color:#1e293b;border:none;border-radius:8px;padding:5px 12px;font-weight:800;font-size:12px;cursor:pointer;">安裝</button><button onclick="document.getElementById('install-banner').remove()" style="background:transparent;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-size:16px;padding:0 4px;">×</button>';
             document.body.appendChild(banner);
             setTimeout(() => banner?.remove(), 12000);
