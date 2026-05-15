@@ -2,9 +2,15 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>沖繩自駕之旅 - 互動地圖</title>
-    <!-- 引入外部資源 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>沖繩自駕之旅 2026</title>
+    <!-- PWA -->
+    <link rel="manifest" href="data:application/json,{%22name%22:%22%E6%B2%96%E7%B9%A9%E8%87%AA%E9%A7%95%E4%B9%8B%E6%97%85%202026%22,%22short_name%22:%22%E6%B2%96%E7%B9%A9%E4%B9%8B%E6%97%85%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%231e293b%22,%22theme_color%22:%22%231e293b%22,%22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg%20xmlns%3D'http://www.w3.org/2000/svg'%20viewBox%3D'0%200%20512%20512'%3E%3Crect%20width%3D'512'%20height%3D'512'%20rx%3D'80'%20fill%3D'%231e293b'/%3E%3Ctext%20x%3D'256'%20y%3D'340'%20font-size%3D'280'%20text-anchor%3D'middle'%3E%F0%9F%8F%9D%3C/text%3E%3C/svg%3E%22,%22sizes%22:%22512x512%22,%22type%22:%22image/svg+xml%22}]}">
+    <meta name="theme-color" content="#1e293b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="沖繩之旅">
+    <meta name="mobile-web-app-capable" content="yes">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -12,855 +18,1537 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Firebase Compat SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
     <style>
-        /* 鎖定全螢幕，採用 App 式佈局 */
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background-color: #f8fafc; }
-        #root { height: 100%; width: 100%; display: flex; flex-direction: column; overflow: hidden; }
-        
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        /* 自訂捲軸 */
-        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        /* 地圖樣式覆寫 */
-        .leaflet-div-icon { background: transparent; border: none; }
-        .leaflet-popup-content-wrapper { border-radius: 16px; padding: 0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); overflow: hidden; }
-        .leaflet-popup-content { margin: 0; }
-        
-        /* 地圖標記懸停動畫 */
-        .marker-anim { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        .marker-anim:hover { transform: scale(1.2); z-index: 1000 !important; }
+        :root {
+            --bg:#f0f4f8; --surface:#fff; --surface2:#f8fafc;
+            --border:#e2e8f0; --text:#1e293b; --text-muted:#64748b; --text-faint:#94a3b8;
+            --accent:#0ea5e9; --accent-dark:#0284c7;
+            --green:#10b981; --red:#ef4444; --amber:#f59e0b;
+            --sidebar-w:340px; --header-h:56px; --nav-h:50px;
+            /* iOS safe area */
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-left: env(safe-area-inset-left, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
+        }
+        *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+        body,html{margin:0;padding:0;height:100%;width:100%;overflow:hidden;background:var(--bg);font-family:'Noto Sans TC',sans-serif;}
+        /* Use dvh (dynamic viewport height) so mobile browser chrome doesn't break layout */
+        #root{height:100%;height:100dvh;width:100%;display:flex;flex-direction:column;}
 
-        /* 導航路線動畫 */
-        .route-line { stroke-dasharray: 15, 15; animation: dash 30s linear infinite; }
-        @keyframes dash { to { stroke-dashoffset: -1000; } }
+        .scroll::-webkit-scrollbar{width:4px;}
+        .scroll::-webkit-scrollbar-track{background:transparent;}
+        .scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px;}
+        .scroll{-ms-overflow-style:none;scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
 
-        /* 防止行動端點擊閃爍與縮放 */
-        * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-        input, select, textarea { font-size: 16px !important; }
-        .route-checkbox:checked + div { border-color: transparent; }
-        
-        /* 動畫 */
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        .icon-spin { animation: spin 1s linear infinite; }
-        .drag-over { border: 2px dashed #3b82f6 !important; opacity: 0.7; transform: scale(0.98); }
-        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .toast-enter { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        /* Map */
+        .leaflet-div-icon{background:transparent;border:none;}
+        .leaflet-popup-content-wrapper{border-radius:14px;padding:0;box-shadow:0 8px 32px rgba(0,0,0,.12);border:1px solid var(--border);overflow:hidden;}
+        .leaflet-popup-content{margin:0;min-width:180px;}
+        .leaflet-popup-tip-container{display:none;}
+        .leaflet-control-zoom{border:none!important;box-shadow:0 2px 12px rgba(0,0,0,.1)!important;border-radius:12px!important;overflow:hidden;}
+        .leaflet-control-zoom a{background:white!important;color:var(--text)!important;border:none!important;font-size:16px!important;line-height:30px!important;width:32px!important;height:32px!important;}
+        .leaflet-control-zoom a:hover{background:var(--bg)!important;}
+        .map-marker{transition:transform .15s cubic-bezier(.34,1.56,.64,1);cursor:pointer;}
+        .map-marker:hover{transform:scale(1.25);}
+        .route-animated{stroke-dasharray:12 8;animation:dashFlow 20s linear infinite;}
+        @keyframes dashFlow{to{stroke-dashoffset:-500;}}
+
+        /* Animations */
+        .fade-in{animation:fadeIn .2s ease;}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+        .modal-bg{animation:bgFade .2s ease;}
+        @keyframes bgFade{from{opacity:0}to{opacity:1}}
+        .modal-panel{animation:panelUp .25s cubic-bezier(.16,1,.3,1);}
+        @keyframes panelUp{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+        .spin{animation:spin 1s linear infinite;}
+        @keyframes spin{to{transform:rotate(360deg)}}
+
+        /* Nav tabs (bottom mobile / header desktop) */
+        .nav-tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 14px;border:none;background:transparent;cursor:pointer;font-weight:800;font-size:10px;color:var(--text-faint);transition:color .15s;border-radius:10px;}
+        .nav-tab.active{color:var(--accent);}
+        .nav-tab:hover:not(.active){color:var(--text-muted);}
+
+        /* Day tabs */
+        .day-tab{flex-shrink:0;width:44px;height:36px;border-radius:10px;font-weight:900;font-size:13px;transition:all .15s;border:2px solid transparent;cursor:pointer;}
+        .day-tab.active{background:var(--text);color:white;box-shadow:0 2px 8px rgba(0,0,0,.15);}
+        .day-tab.inactive{background:var(--surface);color:var(--text-muted);border-color:var(--border);}
+        .day-tab.inactive:hover{border-color:var(--text-muted);color:var(--text);}
+
+        /* Trip card */
+        .trip-card{background:white;border-radius:14px;border:1.5px solid var(--border);transition:box-shadow .15s,transform .15s,border-color .15s;cursor:pointer;position:relative;overflow:hidden;}
+        .trip-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);border-color:#cbd5e1;transform:translateY(-1px);}
+        .trip-card:active{transform:scale(.985);}
+        .trip-card.dragging{opacity:.4;}
+        .trip-card.drag-over{border-color:var(--accent)!important;background:#f0f9ff!important;}
+
+        /* Buttons */
+        .btn-primary{background:var(--text);color:white;border-radius:11px;font-weight:800;font-size:14px;padding:9px 18px;transition:all .15s;border:none;cursor:pointer;display:flex;align-items:center;gap:6px;}
+        .btn-primary:hover{background:#334155;}
+        .btn-primary:active{transform:scale(.97);}
+        .btn-ghost{background:white;color:var(--text-muted);border:1.5px solid var(--border);border-radius:9px;font-weight:700;font-size:12px;padding:6px 11px;transition:all .15s;cursor:pointer;display:flex;align-items:center;gap:5px;}
+        .btn-ghost:hover{background:var(--bg);color:var(--text);border-color:#cbd5e1;}
+        .btn-ghost:active{transform:scale(.97);}
+
+        /* View toggle */
+        .view-toggle{background:rgba(255,255,255,.12);border-radius:11px;padding:3px;display:flex;gap:2px;}
+        .view-btn{padding:5px 12px;border-radius:8px;font-weight:800;font-size:12px;border:none;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px;background:transparent;color:rgba(255,255,255,.6);}
+        .view-btn.active{background:white;color:var(--text);box-shadow:0 1px 6px rgba(0,0,0,.15);}
+        .view-btn:not(.active):hover{color:white;}
+
+        /* Map layer toggle button */
+        .layer-btn{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;border:1.5px solid var(--border);background:white;font-weight:700;font-size:11px;cursor:pointer;transition:all .15s;color:var(--text-muted);white-space:nowrap;}
+        .layer-btn.on{border-color:currentColor;}
+        .layer-btn:hover{background:var(--bg);}
+        /* On mobile, layer controls go bottom-left above resize handle */
+        @media(max-width:767px){
+            .map-layer-controls{bottom:56px!important;top:auto!important;right:auto!important;left:10px!important;flex-direction:row!important;}
+        }
+
+        /* Toast */
+        .toast{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--text);color:white;padding:10px 20px;border-radius:99px;font-weight:700;font-size:13px;white-space:nowrap;display:flex;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);animation:fadeIn .3s cubic-bezier(.16,1,.3,1);}
+        @media(min-width:768px){.toast{bottom:24px;}}
+
+        /* Form */
+        .form-input{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;font-weight:600;font-size:14px;font-family:'Noto Sans TC',sans-serif;outline:none;transition:border-color .15s;background:white;color:var(--text);}
+        .form-input:focus{border-color:var(--accent);}
+        .form-label{font-size:11px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:block;}
+
+        /* Badge */
+        .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:800;}
+
+        /* Member pill */
+        .member-pill{display:inline-flex;align-items:center;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700;background:var(--bg);color:var(--text-muted);border:1.5px solid var(--border);transition:all .12s;cursor:pointer;}
+        .member-pill.selected{background:var(--text);color:white;border-color:var(--text);}
+
+        /* Route */
+        .route-stop{display:flex;gap:12px;align-items:flex-start;cursor:pointer;}
+        .route-stop:hover .stop-card{border-color:var(--accent);}
+        .stop-card{background:white;border:1.5px solid var(--border);border-radius:12px;padding:10px 14px;flex:1;transition:border-color .15s;}
+        .route-leg{display:flex;align-items:center;padding:5px 0 5px 44px;}
+        .route-leg-pill{background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;color:var(--text-muted);display:flex;align-items:center;gap:5px;}
+
+        /* Resize handle */
+        .resize-handle{width:100%;height:18px;display:flex;align-items:center;justify-content:center;cursor:row-resize;flex-shrink:0;background:var(--border);}
+        .resize-handle::before{content:'';width:32px;height:3px;background:#94a3b8;border-radius:99px;}
+
+        /* Map popup */
+        .popup-content{padding:14px;}
+        .popup-nav{background:var(--accent);color:white!important;display:block;text-align:center;padding:8px;border-radius:8px;font-weight:800;font-size:12px;text-decoration:none;transition:background .15s;margin-top:10px;}
+        .popup-nav:hover{background:var(--accent-dark);}
+
+        /* Sub type btn */
+        .subtype-btn{padding:8px 4px;border-radius:10px;border:1.5px solid var(--border);background:white;cursor:pointer;transition:all .12s;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:800;color:var(--text-muted);}
+
+        /* Bottom nav (mobile) */
+        .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + var(--safe-bottom));background:white;border-top:1px solid var(--border);z-index:300;align-items:flex-start;justify-content:space-around;padding:4px 4px 0;padding-bottom:calc(4px + var(--safe-bottom));}
+        @media(max-width:767px){.bottom-nav{display:flex;}}
+
+        /* FAB */
+        .fab{position:fixed;right:max(18px, var(--safe-right));bottom:calc(var(--nav-h) + var(--safe-bottom) + 12px);width:52px;height:52px;border-radius:50%;background:var(--text);color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.22),0 0 0 3px rgba(255,255,255,.15);transition:all .15s;z-index:200;}
+        .fab:active{transform:scale(.9);}
+        @media(min-width:768px){.fab{display:none;}}
+
+        /* Expense */
+        .expense-card{background:white;border:1.5px solid var(--border);border-radius:14px;padding:14px;transition:border-color .15s;}
+        .expense-card:hover{border-color:#cbd5e1;}
+        .settlement-row{display:flex;align-items:center;gap:10px;padding:12px 14px;background:white;border:1.5px solid var(--border);border-radius:12px;margin-bottom:8px;}
+
+        /* Weather card */
+        .weather-card{background:white;border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;}
+
+        /* Touch drag */
+        .trip-card.touch-dragging{opacity:.4;transform:scale(.97);box-shadow:0 8px 24px rgba(0,0,0,.15);}
+        .trip-card.touch-drop-over{border-color:var(--accent)!important;background:#f0f9ff!important;transform:translateY(-3px);}
+
+        /* Modal keyboard-aware: on mobile let form scroll freely */
+        @media(max-width:767px){
+            .modal-panel form{padding-bottom:200px!important;}
+            .modal-panel{max-height:92dvh!important;margin-bottom:0!important;}
+        }
+
+        /* Compact header on very small screens */
+        @media(max-width:380px){
+            .header-title{font-size:13px!important;}
+            .header-subtitle{display:none!important;}
+            .header-logo{display:none!important;}
+        }
+
+        /* Smooth scrolling on iOS */
+        .scroll{-webkit-overflow-scrolling:touch;}
+
+        input,select,textarea{font-size:16px!important;}
+
+        /* Day tabs: smaller on mobile */
+        @media(max-width:767px){
+            .day-tab{width:38px!important;height:34px!important;font-size:12px!important;}
+            .btn-ghost{padding:5px 8px!important;font-size:11px!important;}
+        }
     </style>
 </head>
 <body>
-    <div id="root"></div>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo, memo } = React;
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef, useCallback } = React;
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+const firebaseConfig = {
+    apiKey:"AIzaSyDEwxQqGnGcyr-480VFTbsE1FZDcf3neFo",
+    authDomain:"okinawahot-174b8.firebaseapp.com",
+    projectId:"okinawahot-174b8",
+    storageBucket:"okinawahot-174b8.firebasestorage.app",
+    messagingSenderId:"502127203745",
+    appId:"1:502127203745:web:7935f2cf50659025aca7e0"
+};
+const TRIP_ID = 'okinawa-trip-2026';
+const MEMBERS = ["志展","盧志","大維","禹康","懿軒","健祐","訓鳴"];
 
-        // ==========================================
-        // 1. ⚠️【重要設定】請在此填入您的 Firebase 金鑰
-        // ==========================================
-        const firebaseConfig = {
-            apiKey: "AIzaSyDEwxQqGnGcyr-480VFTbsE1FZDcf3neFo",
-            authDomain: "okinawahot-174b8.firebaseapp.com",
-            projectId: "okinawahot-174b8",
-            storageBucket: "okinawahot-174b8.firebasestorage.app",
-            messagingSenderId: "502127203745",
-            appId: "1:502127203745:web:7935f2cf50659025aca7e0"
-        };
+// ⚠️ 請填入你的 OpenWeatherMap API Key（免費申請：openweathermap.org）
+const OWM_KEY = "11b665159f124854bb30cb17f40625c2";
 
-        const TRIP_ID = 'okinawa-trip-2026'; // 您專屬的資料庫識別碼
-        const MEMBERS = ["志展", "盧志", "大維", "禹康", "懿軒", "健祐", "訓鳴"];
-        
-        // ==========================================
-        // 基本設定與常數
-        // ==========================================
-        const SUB_TYPES = {
-            attraction: { label: '景點', color: '#3b82f6', icon: 'camera', badgeBg: 'bg-blue-100', badgeText: 'text-blue-700', border: 'border-blue-500' },
-            food: { label: '食物', color: '#ef4444', icon: 'utensils', badgeBg: 'bg-red-100', badgeText: 'text-red-700', border: 'border-red-500' },
-            shopping: { label: '購物', color: '#a855f7', icon: 'shopping-bag', badgeBg: 'bg-purple-100', badgeText: 'text-purple-700', border: 'border-purple-500' },
-            accommodation: { label: '住宿', color: '#f97316', icon: 'bed', badgeBg: 'bg-orange-100', badgeText: 'text-orange-700', border: 'border-orange-500' }
-        };
-        const DAY_COLORS = { 1: '#3b82f6', 2: '#10b981', 3: '#ef4444', 4: '#f59e0b', 5: '#8b5cf6', 6: '#ec4899' };
+const SUB_TYPES = {
+    attraction:    {label:'景點',color:'#3b82f6',icon:'camera',      bg:'#eff6ff',text:'#1d4ed8'},
+    food:          {label:'美食',color:'#ef4444',icon:'utensils',    bg:'#fef2f2',text:'#b91c1c'},
+    shopping:      {label:'購物',color:'#a855f7',icon:'shopping-bag',bg:'#faf5ff',text:'#7e22ce'},
+    accommodation: {label:'住宿',color:'#f97316',icon:'bed',          bg:'#fff7ed',text:'#c2410c'},
+};
+const DAY_COLORS = {1:'#3b82f6',2:'#10b981',3:'#ef4444',4:'#f59e0b',5:'#8b5cf6',6:'#ec4899'};
 
-        const INITIAL_ITINERARY = [
-            { id: 'seed_1', day: 1, time: '19:45', content: '全員抵達那霸機場、飯店 Check-in', location: '那霸機場', url: 'https://www.google.com/maps/search/?api=1&query=那霸機場', lat: 26.2064, lng: 127.6465, member: '志展', type: 'main', subType: 'accommodation' },
-            { id: 'seed_2', day: 1, time: '21:30', content: '晚餐：Torijin Naha (鳥神串燒)', location: 'Torijin Naha', url: 'https://www.google.com/maps/search/?api=1&query=那覇+焼き鳥+鳥神', lat: 26.2155, lng: 127.6792, member: '盧志', type: 'main', subType: 'food' },
-            { id: 'seed_3', day: 2, time: '09:00', content: '市區取車 → 波上宮', location: '波上宮', url: 'https://www.google.com/maps/search/?api=1&query=波上宮', lat: 26.2207, lng: 127.6711, member: '大維', type: 'main', subType: 'attraction' },
-            { id: 'seed_4', day: 2, time: '11:30', content: '午餐：漁師食堂 (海鮮)', location: '漁師食堂', url: 'https://www.google.com/maps/search/?api=1&query=漁師食堂+大木海產物', lat: 26.3456, lng: 127.7890, member: '禹康', type: 'main', subType: 'food' },
-            { id: 'seed_5', day: 2, time: '14:00', content: '購物：PARCO CITY', location: 'PARCO CITY', url: 'https://www.google.com/maps/search/?api=1&query=浦添西海岸+PARCO+CITY', lat: 26.2625, lng: 127.6975, member: '懿軒', type: 'main', subType: 'shopping' },
-            { id: 'seed_6', day: 3, time: '10:00', content: '重點：美麗海水族館', location: '美麗海水族館', url: 'https://www.google.com/maps/search/?api=1&query=沖縄美ら海水族館', lat: 26.6944, lng: 127.8779, member: '大維', type: 'main', subType: 'attraction' },
-            { id: 'seed_7', day: 4, time: '12:00', content: '散策：美國村深度漫遊', location: '美國村', url: 'https://www.google.com/maps/search/?api=1&query=北谷美浜アメリカンビレッジ', lat: 26.3163, lng: 127.7576, member: '盧志', type: 'main', subType: 'attraction' },
-            { id: 'seed_8', day: 5, time: '10:30', content: '景點：沖繩世界 (玉泉洞)', location: '沖繩世界', url: 'https://www.google.com/maps/search/?api=1&query=おきなわワールド', lat: 26.1397, lng: 127.7503, member: '志展', type: 'main', subType: 'attraction' },
-            { id: 'seed_9', day: 6, time: '09:30', content: '景點：首里城參觀', location: '首里城', url: 'https://www.google.com/maps/search/?api=1&query=首里城', lat: 26.2170, lng: 127.7194, member: '懿軒', type: 'main', subType: 'attraction' }
-        ];
+// 沖繩主要城市座標（天氣用）
+const OWM_CITIES = [
+    {name:'那霸',   lat:26.2124, lng:127.6809},
+    {name:'沖繩市', lat:26.3344, lng:127.8056},
+    {name:'名護',   lat:26.5912, lng:127.9776},
+    {name:'糸満',   lat:26.1243, lng:127.6657},
+    {name:'宜野灣', lat:26.2816, lng:127.7783},
+];
 
-        // ==========================================
-        // 2. 共用小元件 (Shared UI Components)
-        // ==========================================
-        const Icon = ({ name, className = "w-4 h-4" }) => {
-            const iconRef = useRef(null);
-            useEffect(() => {
-                if (iconRef.current && window.lucide) {
-                    iconRef.current.innerHTML = `<i data-lucide="${name}" class="${className}"></i>`;
-                    window.lucide.createIcons({ root: iconRef.current });
-                }
-            }, [name, className]);
-            return <span ref={iconRef} style={{ display: 'contents' }}></span>;
-        };
+const INITIAL_ITINERARY = [
+    {id:'seed_1',day:1,time:'19:45',content:'全員抵達那霸機場、飯店 Check-in',location:'那霸機場',url:'https://www.google.com/maps/search/?api=1&query=那霸機場',lat:26.2064,lng:127.6465,member:'志展',type:'main',subType:'accommodation'},
+    {id:'seed_2',day:1,time:'21:30',content:'晚餐：Torijin Naha (鳥神串燒)',location:'Torijin Naha',url:'https://www.google.com/maps/search/?api=1&query=那覇+焼き鳥+鳥神',lat:26.2155,lng:127.6792,member:'盧志',type:'main',subType:'food'},
+    {id:'seed_3',day:2,time:'09:00',content:'市區取車 → 波上宮',location:'波上宮',url:'https://www.google.com/maps/search/?api=1&query=波上宮',lat:26.2207,lng:127.6711,member:'大維',type:'main',subType:'attraction'},
+    {id:'seed_4',day:2,time:'11:30',content:'午餐：漁師食堂 (海鮮)',location:'漁師食堂',url:'https://www.google.com/maps/search/?api=1&query=漁師食堂+大木海產物',lat:26.3456,lng:127.789,member:'禹康',type:'main',subType:'food'},
+    {id:'seed_5',day:2,time:'14:00',content:'購物：PARCO CITY',location:'PARCO CITY',url:'https://www.google.com/maps/search/?api=1&query=浦添西海岸+PARCO+CITY',lat:26.2625,lng:127.6975,member:'懿軒',type:'main',subType:'shopping'},
+    {id:'seed_6',day:3,time:'10:00',content:'重點：美麗海水族館',location:'美麗海水族館',url:'https://www.google.com/maps/search/?api=1&query=沖縄美ら海水族館',lat:26.6944,lng:127.8779,member:'大維',type:'main',subType:'attraction'},
+    {id:'seed_7',day:4,time:'12:00',content:'散策：美國村深度漫遊',location:'美國村',url:'https://www.google.com/maps/search/?api=1&query=北谷美浜アメリカンビレッジ',lat:26.3163,lng:127.7576,member:'盧志',type:'main',subType:'attraction'},
+    {id:'seed_8',day:5,time:'10:30',content:'景點：沖繩世界 (玉泉洞)',location:'沖繩世界',url:'https://www.google.com/maps/search/?api=1&query=おきなわワールド',lat:26.1397,lng:127.7503,member:'志展',type:'main',subType:'attraction'},
+    {id:'seed_9',day:6,time:'09:30',content:'景點：首里城參觀',location:'首里城',url:'https://www.google.com/maps/search/?api=1&query=首里城',lat:26.217,lng:127.7194,member:'懿軒',type:'main',subType:'attraction'},
+];
 
-        const Toast = ({ message, visible }) => {
-            if (!visible) return null;
-            return (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[4000] toast-enter">
-                    <div className="bg-slate-800 text-white px-5 py-3 rounded-full shadow-2xl flex items-center gap-2 font-bold text-sm whitespace-nowrap">
-                        <Icon name="check-circle-2" className="w-5 h-5 text-green-400" /> {message}
-                    </div>
-                </div>
-            );
-        };
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+const sortItems = arr => [...arr].sort((a,b) => a.day!==b.day ? a.day-b.day : a.time.localeCompare(b.time));
+const fmt = n => `NT$ ${Math.round(n).toLocaleString()}`;
 
-        const callGeminiWithBackoff = async (prompt, maxRetries = 5) => {
-            const apiKey = "AIzaSyDrFvEdYOXzvYtJjUGGuC6wPhY60B8_9w0"; // GitHub Pages 環境如需 AI 功能，請在此填入 Gemini API Key
-            if (!apiKey) return "提示：在此環境中未配置 AI API 金鑰。請手動填寫行程內容。";
-            
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-            const payload = { contents: [{ parts: [{ text: prompt }] }] };
+// 最小轉帳結算演算法
+function settle(expenses, members) {
+    const balance = {};
+    members.forEach(m => balance[m] = 0);
 
-            for (let i = 0; i < maxRetries; i++) {
-                try {
-                    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    if (!response.ok) throw new Error(`HTTP error!`);
-                    const data = await response.json();
-                    return data.candidates?.[0]?.content?.parts?.[0]?.text || "無法產生內容。";
-                } catch (error) {
-                    if (i === maxRetries - 1) return "API 呼叫失敗，請稍後再試。";
-                    await new Promise(res => setTimeout(res, Math.pow(2, i) * 1000));
-                }
-            }
-        };
+    expenses.forEach(exp => {
+        const perPerson = exp.amount / exp.forWhom.length;
+        balance[exp.paidBy] += exp.amount;
+        exp.forWhom.forEach(m => { balance[m] -= perPerson; });
+    });
 
-        // ==========================================
-        // 3. 自訂 Hooks (Firestore 同步邏輯)
-        // ==========================================
-        const useFirebase = () => {
-            const [itinerary, setItinerary] = useState([]);
-            const [isLocalMode, setIsLocalMode] = useState(true);
-            const [loading, setLoading] = useState(true);
+    const creditors = [], debtors = [];
+    Object.entries(balance).forEach(([m, b]) => {
+        if (b > 0.5)  creditors.push({m, b});
+        if (b < -0.5) debtors.push({m, b: -b});
+    });
+    creditors.sort((a,b) => b.b - a.b);
+    debtors.sort((a,b) => b.b - a.b);
 
-            useEffect(() => {
-                let unsubscribe;
-                const init = async () => {
-                    // 防呆機制：如果還沒填寫 API 金鑰，直接切換為離線模式
-                    if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("請替換成您的")) {
-                        console.warn("⚠️ 尚未設定 Firebase Config，目前使用本地離線模式 (重整後資料會消失)");
-                        setIsLocalMode(true);
-                        setItinerary(INITIAL_ITINERARY);
-                        setLoading(false);
-                        return;
-                    }
-
-                    try {
-                        const app = firebase.apps.length > 0 ? firebase.app() : firebase.initializeApp(firebaseConfig);
-                        const auth = firebase.auth();
-                        
-                        // 等待匿名登入完成
-                        await auth.signInAnonymously();
-
-                        const db = firebase.firestore();
-                        const col = db.collection('trips').doc(TRIP_ID).collection('itinerary');
-                        
-                        unsubscribe = col.onSnapshot(snapshot => {
-                            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-                            if (data.length > 0) {
-                                setItinerary(data.sort((a, b) => a.day !== b.day ? a.day - b.day : a.time.localeCompare(b.time)));
-                            } else {
-                                INITIAL_ITINERARY.forEach(item => {
-                                    const { id, ...itemData } = item;
-                                    col.doc(id).set(itemData);
-                                });
-                            }
-                            setIsLocalMode(false);
-                            setLoading(false);
-                        }, err => { 
-                            console.error("Firestore 同步權限錯誤 (請檢查 Firestore Rules):", err); 
-                            setIsLocalMode(true); 
-                            setItinerary(INITIAL_ITINERARY);
-                            setLoading(false); 
-                        });
-                        
-                    } catch (e) {
-                        console.warn("無法啟動 Firebase，降級為本地模式", e);
-                        setIsLocalMode(true);
-                        setItinerary(INITIAL_ITINERARY);
-                        setLoading(false);
-                    }
-                };
-                init();
-                return () => unsubscribe && unsubscribe();
-            }, []);
-
-            const saveItem = async (data, isEdit) => {
-                if (isLocalMode) {
-                    if (isEdit) setItinerary(p => p.map(i => i.id === data.id ? data : i).sort((a,b)=> a.day!==b.day ? a.day-b.day : a.time.localeCompare(b.time)));
-                    else setItinerary(p => [...p, { ...data, id: Date.now().toString() }].sort((a,b)=> a.day!==b.day ? a.day-b.day : a.time.localeCompare(b.time)));
-                    return;
-                }
-                const col = firebase.firestore().collection('trips').doc(TRIP_ID).collection('itinerary');
-                if (isEdit) {
-                    const { id, ...updateData } = data;
-                    await col.doc(id).update(updateData);
-                } else {
-                    await col.add(data);
-                }
-            };
-
-            const deleteItem = async (id) => {
-                if (isLocalMode) { setItinerary(p => p.filter(i => i.id !== id)); return; }
-                await firebase.firestore().collection('trips').doc(TRIP_ID).collection('itinerary').doc(id).delete();
-            };
-
-            const batchUpdate = async (updates) => {
-                if (isLocalMode) {
-                    setItinerary(p => p.map(item => {
-                        const match = updates.find(u => u.id === item.id);
-                        return match ? { ...item, ...match } : item;
-                    }).sort((a,b)=> a.day!==b.day ? a.day-b.day : a.time.localeCompare(b.time)));
-                    return;
-                }
-                const db = firebase.firestore();
-                const col = db.collection('trips').doc(TRIP_ID).collection('itinerary');
-                const batch = db.batch();
-                updates.forEach(u => {
-                    const { id, ...fields } = u;
-                    batch.update(col.doc(id), fields);
-                });
-                await batch.commit();
-            }
-
-            return { itinerary, loading, isLocalMode, saveItem, deleteItem, batchUpdate };
-        };
-
-        // ==========================================
-        // 4. 模組化 UI 組件 (Modular Components)
-        // ==========================================
-
-        const Header = ({ isLocalMode, viewMode, setViewMode, onOpenModal }) => (
-            <header className="bg-slate-900 text-white px-3 py-2 md:px-4 md:py-3 shadow-xl flex-shrink-0 flex flex-wrap justify-between items-center z-20 gap-y-2 md:gap-y-3">
-                <div className="flex items-center gap-2 md:gap-3 w-auto">
-                    <div className="bg-blue-600 p-1.5 md:p-2 rounded-lg shadow-inner hidden md:block"><Icon name="map" className="w-4 h-4 md:w-5 md:h-5" /></div>
-                    <div>
-                        <h1 className="text-base md:text-lg font-black tracking-tight leading-none">沖繩旅遊地圖</h1>
-                        <p className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest mt-1 flex gap-1 md:gap-2">
-                            <span className={isLocalMode ? 'text-amber-400' : 'text-emerald-400'}>
-                                {isLocalMode ? '● Offline Mode (未連線資料庫)' : '● Real-time Sync (雲端同步中)'}
-                            </span>
-                        </p>
-                    </div>
-                </div>
-                <div className="w-full md:w-auto flex bg-slate-800 p-1 rounded-xl shadow-inner order-3 md:order-2 justify-center">
-                    <button onClick={() => setViewMode('itinerary')} className={`flex-1 md:flex-none px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center justify-center gap-1.5 md:gap-2 ${viewMode === 'itinerary' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
-                        <Icon name="list" className="w-3.5 h-3.5 md:w-4 md:h-4" /> 單日行程
-                    </button>
-                    <button onClick={() => setViewMode('route')} className={`flex-1 md:flex-none px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center justify-center gap-1.5 md:gap-2 ${viewMode === 'route' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
-                        <Icon name="route" className="w-3.5 h-3.5 md:w-4 md:h-4" /> 路線地圖
-                    </button>
-                </div>
-                <div className="w-auto flex justify-end order-2 md:order-3">
-                    <button onClick={onOpenModal} className="bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 px-3 py-1.5 md:px-4 md:py-2 rounded-full font-bold text-xs md:text-sm flex items-center gap-1 shadow-lg active:scale-95 transition-all border border-blue-400/50">
-                        <Icon name="plus" className="w-3.5 h-3.5 md:w-4 md:h-4" /> 新增
-                    </button>
-                </div>
-            </header>
-        );
-
-        const MapArea = ({ itinerary, viewMode, activeDay, routeDays, selectedLocation, isMobile, mapHeightVH, setRouteMetrics }) => {
-            const mapRef = useRef(null);
-            const leafletMap = useRef(null);
-            const markersRef = useRef({});
-            const polylinesRef = useRef([]);
-
-           // 初始化地圖
-            useEffect(() => {
-                if (!leafletMap.current && mapRef.current) {
-                    leafletMap.current = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: true }).setView([26.4, 127.8], 9);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(leafletMap.current);
-                    
-                    // 【修復破圖】加入 ResizeObserver 來監控容器大小變化，確保地圖隨時保持正確渲染
-                    const resizeObserver = new ResizeObserver(() => {
-                        if (leafletMap.current) {
-                            leafletMap.current.invalidateSize();
-                        }
-                    });
-                    resizeObserver.observe(mapRef.current);
-                }
-            }, []);
-
-            // 繪製標記與路線
-            useEffect(() => {
-                if (!leafletMap.current) return;
-                let isActive = true;
-                leafletMap.current.invalidateSize();
-                
-                Object.values(markersRef.current).forEach(m => m.remove());
-                markersRef.current = {};
-                polylinesRef.current.forEach(p => p.remove());
-                polylinesRef.current = [];
-
-                const daysToRender = viewMode === 'route' ? routeDays : [activeDay];
-                const allLatLngs = [];
-
-                const renderDay = async () => {
-                    const promises = daysToRender.map(async (day) => {
-                        const dayItems = itinerary.filter(i => i.day === day).sort((a,b) => a.time.localeCompare(b.time));
-                        const validItems = dayItems.filter(i => i.lat && i.lng);
-                        if(validItems.length === 0) return { day, metrics: null };
-
-                        const latlngs = validItems.map(i => [i.lat, i.lng]);
-                        allLatLngs.push(...latlngs);
-
-                        validItems.forEach((item, index) => {
-                            const sub = SUB_TYPES[item.subType] || SUB_TYPES.attraction;
-                            const borderColor = item.type === 'backup' ? '#f59e0b' : '#ffffff';
-                            let html = viewMode === 'route' 
-                                ? `<div class="marker-anim flex items-center justify-center text-white font-bold" style="background-color: ${DAY_COLORS[day]}; width: 20px; height: 20px; border: 2px solid ${borderColor}; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.4); font-size: 10px;">${index + 1}</div>`
-                                : `<div class="marker-anim" style="background-color: ${sub.color}; width: 12px; height: 12px; border: 2px solid ${borderColor}; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.4);"></div>`;
-                            
-                            const iconSize = viewMode === 'route' ? [20, 20] : [20, 20];
-                            const icon = L.divIcon({ html, className: '', iconSize, iconAnchor: [iconSize[0]/2, iconSize[1]/2] });
-
-                            const marker = L.marker([item.lat, item.lng], { icon }).addTo(leafletMap.current).bindPopup(`
-                                <div class="p-2 min-w-[140px] md:min-w-[180px]">
-                                    <div class="flex items-center gap-1 mb-1.5"><span class="text-[9px] px-1.5 py-0.5 rounded ${sub.badgeBg} ${sub.badgeText} font-bold">${sub.label}</span></div>
-                                    <h3 class="font-bold text-xs md:text-sm text-slate-800 mb-1 leading-tight truncate">${item.location || item.content}</h3>
-                                    ${item.location ? `<p class="text-[10px] md:text-xs text-gray-500 mb-2 leading-tight line-clamp-2">${item.content}</p>` : ''}
-                                    <a href="${item.url}" target="_blank" rel="noopener noreferrer" style="color: #ffffff !important;" class="text-[10px] md:text-xs bg-blue-600 px-2 py-1.5 md:py-2.5 rounded-md block text-center font-black shadow-md hover:bg-blue-700 active:scale-95 transition-all tracking-widest text-white mt-1">導航</a>
-                                </div>
-                            `, { closeButton: false, autoPanPadding: [20, 20] });
-                            markersRef.current[item.id] = marker;
-                        });
-
-                        if (latlngs.length < 2) return { day, metrics: null };
-
-                        try {
-                            const coordsStr = latlngs.map(ll => `${ll[1]},${ll[0]}`).join(';');
-                            const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`);
-                            const data = await res.json();
-                            if (data.code === 'Ok') {
-                                return { day, metrics: data.routes[0].legs, coords: data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]) };
-                            }
-                        } catch(e) { console.warn(e); }
-                        return { day, metrics: null, coords: latlngs, fallback: true };
-                    });
-
-                    const results = await Promise.all(promises);
-                    if (!isActive) return;
-
-                    const newMetrics = {};
-                    results.forEach(({ day, metrics, coords, fallback }) => {
-                        if(coords) {
-                            const line = L.polyline(coords, { 
-                                color: viewMode === 'route' ? DAY_COLORS[day] : '#64748b', 
-                                weight: fallback ? 3 : 4, opacity: 0.7, 
-                                dashArray: fallback ? '8,8' : '', className: 'route-line' 
-                            }).addTo(leafletMap.current);
-                            polylinesRef.current.push(line);
-                        }
-                        if(metrics) newMetrics[day] = metrics;
-                    });
-                    setRouteMetrics(newMetrics);
-
-                    if (allLatLngs.length > 0) {
-                        const b = L.latLngBounds(allLatLngs);
-                        leafletMap.current.fitBounds(b, { padding: [50, 50], maxZoom: 15 });
-                    }
-                };
-                setTimeout(renderDay, 100);
-                return () => isActive = false;
-            }, [itinerary, viewMode, activeDay, routeDays]);
-
-            // 監聽拖曳改變高度
-            useEffect(() => { if (leafletMap.current) leafletMap.current.invalidateSize(); }, [mapHeightVH, isMobile]);
-
-            // 點擊列表時聚焦地圖
-            useEffect(() => {
-                if (selectedLocation && leafletMap.current) {
-                    leafletMap.current.setView([selectedLocation.lat, selectedLocation.lng], 16, { animate: true });
-                    setTimeout(() => {
-                        if (markersRef.current[selectedLocation.id]) markersRef.current[selectedLocation.id].openPopup();
-                    }, 300);
-                }
-            }, [selectedLocation]);
-
-            return (
-                <div className="relative w-full md:w-[70%] md:flex-none z-0 order-1 md:order-2 flex-shrink-0 md:border-b-0 border-slate-200" style={{ height: isMobile ? `${mapHeightVH}vh` : '100%' }}>
-                    <div id="map-container" ref={mapRef} className="absolute inset-0 w-full h-full z-0 bg-slate-100"></div>
-                    <div className="absolute bottom-3 left-3 md:bottom-4 md:left-4 z-[1000] pointer-events-none md:pointer-events-auto">
-                        <div className="bg-white/95 backdrop-blur-md p-2 md:p-2.5 rounded-xl shadow-lg border border-slate-100 text-[10px] md:text-xs space-y-1 md:space-y-1.5">
-                            <div className="flex items-center gap-1 md:gap-2 font-black text-slate-800 border-b border-slate-100 pb-1"><Icon name="info" className="w-3 h-3 md:w-4 md:h-4 text-blue-500" /> 圖例</div>
-                            {viewMode === 'itinerary' ? (
-                                <div className="flex flex-col gap-y-1">
-                                    {Object.values(SUB_TYPES).map(s => (
-                                        <div key={s.label} className="flex items-center gap-1.5 md:gap-2 font-bold text-slate-600">
-                                            <div className="w-2 h-2 md:w-3 md:h-3 rounded-full shadow-sm border border-white" style={{backgroundColor: s.color}}></div> {s.label}
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="flex flex-col gap-1">
-                                    <div className="flex items-center gap-1.5 md:gap-2 font-bold text-slate-600"><div className="w-3 h-3 md:w-4 md:h-4 rounded-full shadow-sm flex items-center justify-center text-[7px] md:text-[8px] text-white bg-slate-800">1</div> 順序</div>
-                                    <div className="flex items-center gap-1.5 md:gap-2 font-bold text-slate-600"><div className="w-3 h-1 md:w-4 md:h-1.5 rounded-full bg-slate-400"></div> 行車路線</div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const Sidebar = ({ itinerary, viewMode, activeDay, setActiveDay, routeDays, toggleRouteDay, onEdit, onDelete, onShiftTime, onDragDrop, onFocus, routeMetrics, showToast }) => {
-            const [draggedId, setDraggedId] = useState(null);
-            const [isGettingAdvice, setIsGettingAdvice] = useState(false);
-            const [aiAdviceMap, setAiAdviceMap] = useState({});
-
-            const handleGetDailyAdvice = async () => {
-                const dayItems = itinerary.filter(i => i.day === activeDay).sort((a,b) => a.time.localeCompare(b.time));
-                if (dayItems.length === 0) return;
-                setIsGettingAdvice(true);
-                const itineraryText = dayItems.map(i => `${i.time} - ${i.location || i.content}`).join('\n');
-                const prompt = `你是一個專業的沖繩旅遊顧問。這是我規劃的第 ${activeDay} 天行程：\n${itineraryText}\n\n請用繁體中文給出一段約 50 字以內的簡短建議。指出行程順暢度、或該地點隱藏亮點。`;
-                const advice = await callGeminiWithBackoff(prompt);
-                setAiAdviceMap(prev => ({ ...prev, [activeDay]: advice }));
-                setIsGettingAdvice(false);
-            };
-
-            const handleExportText = () => {
-                const items = itinerary.filter(i => i.day === activeDay).sort((a,b)=>a.time.localeCompare(b.time));
-                let txt = `🚗 沖繩自駕 Day ${activeDay} 行程\n`;
-                items.forEach(i => { txt += `[${i.time}] ${i.location || i.content}\n${i.location && i.content !== i.location ? `  📝 ${i.content}\n` : ''}`; });
-                const el = document.createElement('textarea'); el.value = txt; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
-                showToast("✅ 已將純文字行程複製到剪貼簿！");
-            };
-
-            const handleExportNav = () => {
-                const items = itinerary.filter(i => i.day === activeDay && i.lat).sort((a,b)=>a.time.localeCompare(b.time));
-                if(items.length < 2) return showToast("⚠️ 當天需至少有兩個含座標的地點才能產生導航！");
-                const origin = `${items[0].lat},${items[0].lng}`;
-                const dest = `${items[items.length-1].lat},${items[items.length-1].lng}`;
-                const wps = items.slice(1,-1).map(i => `${i.lat},${i.lng}`).join('|');
-                window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=driving${wps ? `&waypoints=${wps}` : ''}`, '_blank');
-            };
-
-            return (
-                <div className="flex-1 md:flex-none w-full md:w-[30%] flex flex-col bg-slate-50 overflow-hidden shadow-2xl z-10 order-3 md:order-1 flex-shrink-0">
-                    {viewMode === 'itinerary' ? (
-                        <React.Fragment>
-                            <div className="flex overflow-x-auto p-2 md:p-3 bg-white gap-1.5 md:gap-2 border-b flex-shrink-0 scrollbar-hide shadow-sm z-10">
-                                {[1,2,3,4,5,6].map(d => (
-                                    <button key={d} onClick={() => setActiveDay(d)} className={`flex-shrink-0 w-12 h-10 md:w-14 md:h-12 rounded-xl font-black text-sm md:text-lg transition-all active:scale-90 flex items-center justify-center ${activeDay === d ? 'bg-slate-900 text-white shadow-md transform scale-105' : 'bg-slate-100 text-slate-400 border border-slate-200 hover:bg-slate-200'}`}>D{d}</button>
-                                ))}
-                            </div>
-                            
-                            <div className="px-3 md:px-4 pt-3 md:pt-4 flex gap-2">
-                                <button onClick={handleExportText} className="flex-1 bg-white border border-slate-200 text-slate-600 text-[10px] md:text-xs font-bold py-2 rounded-lg shadow-sm hover:bg-slate-50 active:scale-95 flex items-center justify-center gap-1.5"><Icon name="copy" className="w-3.5 h-3.5" />複製行程</button>
-                                <button onClick={handleExportNav} className="flex-1 bg-white border border-slate-200 text-slate-600 text-[10px] md:text-xs font-bold py-2 rounded-lg shadow-sm hover:bg-slate-50 active:scale-95 flex items-center justify-center gap-1.5"><Icon name="navigation" className="w-3.5 h-3.5 text-blue-500" />多點導航</button>
-                            </div>
-
-                            {itinerary.filter(i => i.day === activeDay).length > 0 && (
-                                <div className="px-3 pt-3 md:px-4 md:pt-4 pb-0 z-10 bg-slate-50">
-                                    <button onClick={handleGetDailyAdvice} disabled={isGettingAdvice} className="w-full bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 text-indigo-700 text-[11px] md:text-xs font-bold py-2 rounded-xl shadow-sm hover:shadow active:scale-95 transition-all flex items-center justify-center gap-1.5">
-                                        {isGettingAdvice ? <Icon name="loader-2" className="w-3.5 h-3.5 md:w-4 md:h-4 icon-spin" /> : "✨ AI 幫我看看今天行程"}
-                                    </button>
-                                    {aiAdviceMap[activeDay] && (
-                                        <div className="mt-2.5 p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-[11px] md:text-xs text-slate-700 leading-relaxed shadow-inner relative animate-in fade-in slide-in-from-top-2">
-                                            <strong className="text-indigo-800 block mb-1"><span className="text-xs md:text-[14px]">💡</span> 行程建議：</strong>
-                                            {aiAdviceMap[activeDay]}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3 md:space-y-4 custom-scrollbar bg-slate-50 pb-10">
-                                <p className="text-[9px] md:text-[10px] text-center text-slate-400 font-bold mb-1.5 md:mb-2">💡 提示：按住卡片可上下拖曳排序</p>
-                                {itinerary.filter(i => i.day === activeDay).map((item) => {
-                                    const sub = SUB_TYPES[item.subType] || SUB_TYPES.attraction;
-                                    const isDragging = draggedId === item.id;
-                                    return (
-                                        <div key={item.id} draggable onDragStart={(e)=>{ e.dataTransfer.setData('text', item.id); setDraggedId(item.id);}} onDragOver={e=>{e.preventDefault(); e.currentTarget.classList.add('drag-over');}} onDragLeave={e=>e.currentTarget.classList.remove('drag-over')} onDrop={e=>{e.preventDefault(); e.currentTarget.classList.remove('drag-over'); onDragDrop(e.dataTransfer.getData('text'), item.id); setDraggedId(null);}} onClick={() => onFocus(item)} className={`group cursor-pointer bg-white border-2 rounded-2xl p-3 md:p-4 shadow-sm border-l-[4px] md:border-l-[6px] transition-all duration-200 active:scale-[0.98] md:hover:-translate-y-1 md:hover:shadow-md overflow-hidden ${sub.border.replace('border-','border-l-')} border-t-transparent border-r-transparent border-b-transparent ${isDragging?'opacity-40':''}`}>
-                                            <div className="flex justify-between items-start mb-1.5 md:mb-2">
-                                                <div className="flex items-center gap-1.5 md:gap-2 flex-wrap">
-                                                    <span className="text-[11px] md:text-sm font-black text-slate-600 flex items-center gap-1 bg-slate-100 px-2 py-0.5 md:px-2.5 md:py-1 rounded-md"><Icon name="clock" className="w-3 h-3 md:w-3.5 md:h-3.5" /> {item.time}</span>
-                                                    <span className={`text-[9px] md:text-xs px-2 py-0.5 md:px-2.5 md:py-1 rounded-md font-black flex items-center gap-1 ${sub.badgeBg} ${sub.badgeText}`}><Icon name={sub.icon} className="w-2.5 h-2.5 md:w-3 md:h-3" /> {sub.label}</span>
-                                                    {item.type === 'backup' && <span className="text-[9px] md:text-xs px-2 py-0.5 md:px-2.5 md:py-1 rounded-md font-black bg-amber-100 text-amber-700 border border-amber-200">備選</span>}
-                                                </div>
-                                                <div className="flex gap-1">
-                                                    <button onClick={(e) => { e.stopPropagation(); onShiftTime(item.id); }} title="將此行程與後續行程延後 30 分鐘" className="p-1 md:p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-400 hover:text-indigo-600 transition-colors font-black text-[9px] md:text-[10px]">+30分</button>
-                                                    <button onClick={(e) => { e.stopPropagation(); onEdit(item); }} className="p-1 md:p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"><Icon name="edit-3" className="w-3.5 h-3.5 md:w-4 md:h-4" /></button>
-                                                    <button onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} className="p-1 md:p-1.5 hover:bg-red-50 rounded-lg text-red-300 hover:text-red-600 transition-colors"><Icon name="trash-2" className="w-3.5 h-3.5 md:w-4 md:h-4" /></button>
-                                                </div>
-                                            </div>
-                                            <h3 className="font-bold text-sm md:text-lg mb-2 md:mb-3 text-slate-800 leading-tight group-hover:text-blue-600 transition-colors">{item.content}</h3>
-                                            <div className="flex flex-wrap gap-1.5 md:gap-2 items-center">
-                                                <div className="flex items-center gap-1 text-[10px] md:text-xs text-slate-500 bg-white border border-slate-200 px-2 py-1 md:px-2.5 md:py-1.5 rounded-md"><Icon name="user" className="w-3 h-3 md:w-3.5 md:h-3.5" /> {item.member}</div>
-                                                <div className="text-[10px] md:text-xs flex items-center gap-1 text-blue-600 font-black bg-blue-50 px-2 py-1 md:px-2.5 md:py-1.5 rounded-md transition-colors truncate max-w-full"><Icon name="map-pin" className="w-3 h-3 md:w-3.5 md:h-3.5 flex-shrink-0" /> <span className="truncate">{item.location}</span></div>
-                                            </div>
-                                        </div>
-                                    )})}
-                            </div>
-                        </React.Fragment>
-                    ) : (
-                        <React.Fragment>
-                            <div className="p-3 md:p-4 border-b border-slate-200 bg-white z-10 shadow-sm flex-shrink-0">
-                                <h2 className="font-black text-sm md:text-base text-slate-800 mb-1 md:mb-2 flex items-center gap-1.5"><Icon name="route" className="w-4 h-4 md:w-5 md:h-5 text-blue-600"/> 顯示路線</h2>
-                                <div className="grid grid-cols-3 gap-1.5 md:gap-2 mt-1.5 md:mt-2">
-                                    {[1,2,3,4,5,6].map(d => (
-                                        <label key={d} className={`flex items-center gap-1.5 p-1.5 md:p-2 rounded-lg border-2 cursor-pointer transition-all active:scale-95 ${routeDays.includes(d) ? 'border-slate-300 bg-slate-50 shadow-sm' : 'border-slate-100 opacity-60 bg-white'}`}>
-                                            <input type="checkbox" checked={routeDays.includes(d)} onChange={() => toggleRouteDay(d)} className="w-3 h-3 md:w-4 md:h-4 rounded text-blue-600 focus:ring-blue-500 route-checkbox" />
-                                            <div className="w-2 h-2 md:w-3 md:h-3 rounded-full shadow-sm flex-shrink-0" style={{backgroundColor: DAY_COLORS[d]}}></div>
-                                            <span className="font-bold text-slate-700 text-[10px] md:text-sm whitespace-nowrap">D{d}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-4 md:space-y-5 custom-scrollbar bg-slate-50 pb-10">
-                                {routeDays.map(d => {
-                                    const items = itinerary.filter(i => i.day === d).sort((a,b) => a.time.localeCompare(b.time));
-                                    if (items.length === 0) return null;
-                                    return (
-                                        <div key={d} className="relative">
-                                            <div className="absolute left-[11px] md:left-[13px] top-6 bottom-0 w-0.5 md:w-1 bg-slate-200/80 rounded-full"></div>
-                                            <h3 className="font-black text-[11px] md:text-sm mb-2.5 md:mb-4 flex items-center gap-1.5 md:gap-2 px-2.5 py-1 md:px-3 md:py-1.5 bg-white rounded-lg shadow-sm border border-slate-100 inline-flex" style={{color: DAY_COLORS[d]}}><div className="w-2 h-2 md:w-2.5 md:h-2.5 rounded-full" style={{backgroundColor: DAY_COLORS[d]}}></div>Day {d} 停靠點與車程</h3>
-                                            <div className="space-y-0">
-                                                {items.map((item, idx) => (
-                                                    <React.Fragment key={item.id}>
-                                                        <div className="flex gap-2.5 md:gap-3 relative z-10 pl-0.5 cursor-pointer group active:scale-[0.98] transition-transform" onClick={() => onFocus(item)}>
-                                                            <div className="w-[20px] h-[20px] md:w-[26px] md:h-[26px] rounded-full text-white flex items-center justify-center text-[10px] md:text-xs font-bold flex-shrink-0 shadow-md mt-1 md:mt-1.5" style={{backgroundColor: DAY_COLORS[d]}}>{idx + 1}</div>
-                                                            <div className="bg-white p-2 md:p-3 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 w-full overflow-hidden group-hover:border-blue-300 transition-colors">
-                                                                <div className="text-[10px] md:text-xs font-black text-slate-400 mb-0.5 md:mb-1"><Icon name="clock" className="w-2.5 h-2.5 md:w-3 md:h-3 inline pb-0.5"/> {item.time}</div>
-                                                                <div className="text-xs md:text-base font-bold text-slate-700 truncate leading-tight group-hover:text-blue-600 transition-colors">{item.location || item.content}</div>
-                                                            </div>
-                                                        </div>
-                                                        {idx < items.length - 1 && routeMetrics[d] && routeMetrics[d][idx] && (
-                                                            <div className="flex items-center gap-1.5 md:gap-2 py-1 md:py-2 pl-[32px] md:pl-[38px] text-[9px] md:text-[11px] font-bold text-slate-500">
-                                                                <div className="bg-slate-200 rounded-md px-1.5 py-0.5 md:px-2 md:py-1 flex items-center gap-1 md:gap-1.5 shadow-inner">
-                                                                    <Icon name="car" className="w-2.5 h-2.5 md:w-3 md:h-3" /> 車程約 {Math.round(routeMetrics[d][idx].duration / 60)} 分 ({(routeMetrics[d][idx].distance / 1000).toFixed(1)} km)
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {idx < items.length - 1 && (!routeMetrics[d] || !routeMetrics[d][idx]) && <div className="py-1"></div>}
-                                                    </React.Fragment>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </React.Fragment>
-                    )}
-                </div>
-            );
-        };
-const AiAssistant = ({ isOpen, onClose, itinerary, saveItem, batchUpdate, showToast }) => {
-    const [history, setHistory] = React.useState([{
-        role: 'ai',
-        content: '你好！我是專屬的旅遊 AI 助手 ✨\n你可以請我推薦景點加入行程，或是幫忙調整某天的順序！\n(例如：「我想在第三天下午去水族館，請幫我加入行程」或「請幫我把第二天的行程時間排順一點」)'
-    }]);
-    const [input, setInput] = React.useState('');
-    const [isLoading, setIsLoading] = React.useState(false);
-    const chatEndRef = React.useRef(null);
-
-    React.useEffect(() => {
-        if (isOpen && chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }, [history, isOpen]);
-
-    if (!isOpen) return null;
-
-    const handleSend = async () => {
-        if (!input.trim()) return;
-        const userMsg = input;
-        setInput('');
-        setHistory(p => [...p, { role: 'user', content: userMsg }]);
-        setIsLoading(true);
-
-        const contextItinerary = itinerary.map(i => ({
-            id: i.id, day: i.day, time: i.time, location: i.location, content: i.content, type: i.type
-        }));
-
-        const prompt = `你是一位專業的沖繩旅遊規劃 AI 助手。
-【使用者目前行程】：
-${JSON.stringify(contextItinerary)}
-
-【使用者需求】：
-${userMsg}
-
-請依據需求給出建議。如果你推薦新地點，請提供完整的地點名稱與大致座標。
-請「務必」只回傳一個嚴格的 JSON 格式物件，不要包含 markdown 標籤，格式如下：
-{
-  "reply": "給使用者的親切回覆與解釋",
-  "additions": [
-    { "day": 建議天數(數字), "time": "HH:mm", "content": "行程名稱/描述", "location": "真實地點名稱", "lat": 26.2124, "lng": 127.6809, "subType": "attraction", "type": "main", "member": "AI推薦" }
-  ],
-  "updates": [
-    { "id": "要修改的行程ID", "time": "更新後的時間(HH:mm)", "day": 數字 }
-  ]
+    const txns = [];
+    let ci = 0, di = 0;
+    while (ci < creditors.length && di < debtors.length) {
+        const c = creditors[ci], d = debtors[di];
+        const amt = Math.min(c.b, d.b);
+        if (amt > 0.5) txns.push({from: d.m, to: c.m, amount: amt});
+        c.b -= amt; d.b -= amt;
+        if (c.b < 0.5) ci++;
+        if (d.b < 0.5) di++;
+    }
+    return txns;
 }
-如果不需要新增或修改，陣列請留空 []。座標若不確定可填那霸市中心 26.2124, 127.6809。`;
 
-        try {
-            const responseText = await callGeminiWithBackoff(prompt);
-            let cleanText = responseText;
-            const match = responseText.match(/\{[\s\S]*\}/); // 擷取 JSON
-            if (match) cleanText = match[0];
-            const result = JSON.parse(cleanText);
+// ─────────────────────────────────────────────────────────────────────────────
+// ICON
+// ─────────────────────────────────────────────────────────────────────────────
+const Icon = memo(({name, size=16, color}) => {
+    const ref = useRef(null);
+    useEffect(() => {
+        if (!ref.current || !window.lucide) return;
+        ref.current.innerHTML = `<i data-lucide="${name}"></i>`;
+        window.lucide.createIcons({root: ref.current});
+        const svg = ref.current.querySelector('svg');
+        if (svg) { svg.style.width=size+'px'; svg.style.height=size+'px'; svg.style.flexShrink='0'; if(color) svg.style.color=color; }
+    }, [name, size, color]);
+    return <span ref={ref} style={{display:'contents',lineHeight:0}} />;
+});
 
-            setHistory(p => [...p, {
-                role: 'ai',
-                content: result.reply,
-                additions: result.additions || [],
-                updates: result.updates || [],
-                applied: false
-            }]);
-        } catch (e) {
-            console.error(e);
-            setHistory(p => [...p, { role: 'ai', content: "抱歉，我在整理行程格式時遇到了一點問題。可以請您換個方式再說一次嗎？" }]);
+// ─────────────────────────────────────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────────────────────────────────────
+const Toast = ({msg, show}) => show ? (
+    <div className="toast"><Icon name="check-circle-2" size={15} color="#4ade80"/>{msg}</div>
+) : null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIREBASE HOOK
+// ─────────────────────────────────────────────────────────────────────────────
+const useFirebase = () => {
+    const [itinerary, setItinerary] = useState([]);
+    const [expenses,  setExpenses]  = useState([]);
+    const [isLocal,   setIsLocal]   = useState(true);
+    const [loading,   setLoading]   = useState(true);
+    const dbRef = useRef(null);
+
+    useEffect(() => {
+        let unsubIt, unsubEx;
+        const init = async () => {
+            if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('請替換')) {
+                setItinerary(INITIAL_ITINERARY); setIsLocal(true); setLoading(false); return;
+            }
+            try {
+                const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
+                await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+                await firebase.auth().signInAnonymously();
+                const db = firebase.firestore();
+                dbRef.current = db;
+
+                // Itinerary
+                const itCol = db.collection('trips').doc(TRIP_ID).collection('itinerary');
+                unsubIt = itCol.onSnapshot(snap => {
+                    const data = snap.docs.map(d => ({...d.data(), id:d.id}));
+                    if (data.length === 0) INITIAL_ITINERARY.forEach(({id,...item}) => itCol.doc(id).set(item));
+                    else setItinerary(sortItems(data));
+                    setIsLocal(false); setLoading(false);
+                }, () => { setItinerary(INITIAL_ITINERARY); setIsLocal(true); setLoading(false); });
+
+                // Expenses
+                const exCol = db.collection('trips').doc(TRIP_ID).collection('expenses');
+                unsubEx = exCol.onSnapshot(snap => {
+                    setExpenses(snap.docs.map(d => ({...d.data(), id:d.id})).sort((a,b)=>b.createdAt-a.createdAt));
+                }, () => {});
+
+            } catch(e) {
+                console.warn('Firebase failed, local mode', e);
+                setItinerary(INITIAL_ITINERARY); setIsLocal(true); setLoading(false);
+            }
+        };
+        init();
+        return () => { unsubIt?.(); unsubEx?.(); };
+    }, []);
+
+    const getItCol = () => dbRef.current?.collection('trips').doc(TRIP_ID).collection('itinerary');
+    const getExCol = () => dbRef.current?.collection('trips').doc(TRIP_ID).collection('expenses');
+
+    const saveItem = async (data, isEdit) => {
+        if (isLocal) {
+            if (isEdit) setItinerary(p => sortItems(p.map(i => i.id===data.id ? data : i)));
+            else        setItinerary(p => sortItems([...p, {...data, id:Date.now().toString()}]));
+            return;
         }
-        setIsLoading(false);
+        const col = getItCol();
+        if (isEdit) { const {id,...u}=data; await col.doc(id).update(u); } else await col.add(data);
     };
 
-    const handleApply = async (msgIndex) => {
-        const msg = history[msgIndex];
-        if (msg.applied) return;
+    const deleteItem = async (id) => {
+        if (isLocal) { setItinerary(p=>p.filter(i=>i.id!==id)); return; }
+        await getItCol().doc(id).delete();
+    };
 
+    const batchUpdate = async (updates) => {
+        if (isLocal) {
+            setItinerary(p=>sortItems(p.map(item=>{const u=updates.find(x=>x.id===item.id);return u?{...item,...u}:item;})));
+            return;
+        }
+        const db=dbRef.current, col=getItCol(), batch=db.batch();
+        updates.forEach(({id,...fields})=>batch.update(col.doc(id),fields));
+        await batch.commit();
+    };
+
+    const saveExpense = async (data, isEdit) => {
+        const record = {...data, createdAt: isEdit ? data.createdAt : Date.now()};
+        if (isLocal) {
+            if (isEdit) setExpenses(p=>p.map(e=>e.id===record.id?record:e));
+            else        setExpenses(p=>[{...record, id:Date.now().toString()},...p]);
+            return;
+        }
+        const col = getExCol();
+        if (isEdit) { const {id,...u}=record; await col.doc(id).update(u); } else await col.add(record);
+    };
+
+    const deleteExpense = async (id) => {
+        if (isLocal) { setExpenses(p=>p.filter(e=>e.id!==id)); return; }
+        await getExCol().doc(id).delete();
+    };
+
+    return {itinerary, expenses, isLocal, loading, saveItem, deleteItem, batchUpdate, saveExpense, deleteExpense};
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAP AREA (with parking + weather layers)
+// ─────────────────────────────────────────────────────────────────────────────
+const MapArea = memo(({itinerary, viewMode, activeDay, routeDays, focusTarget, onMetrics, isMobile, mapH}) => {
+    const mapEl    = useRef(null);
+    const leaflet  = useRef(null);
+    const markers  = useRef({});
+    const lines    = useRef([]);
+    const observer = useRef(null);
+    const lastKey  = useRef('');
+    // Layer refs
+    const parkingLayer  = useRef(null);
+    const weatherLayer  = useRef(null);
+    const parkingMarkers = useRef([]);
+    const weatherMarkers = useRef([]);
+
+    const [layers, setLayers] = useState({parking:false, weather:false});
+    const layersRef = useRef({parking:false, weather:false});
+    const [parkingLoading, setParkingLoading]  = useState(false);
+    const [weatherLoading, setWeatherLoading]  = useState(false);
+
+    // Init map once
+    useEffect(() => {
+        if (leaflet.current || !mapEl.current) return;
+        leaflet.current = L.map(mapEl.current, {zoomControl:true, scrollWheelZoom:true}).setView([26.4, 127.8], 10);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(leaflet.current);
+        observer.current = new ResizeObserver(() => leaflet.current?.invalidateSize());
+        observer.current.observe(mapEl.current);
+        return () => { observer.current?.disconnect(); leaflet.current?.remove(); leaflet.current = null; };
+    }, []);
+
+    useEffect(() => { setTimeout(() => leaflet.current?.invalidateSize(), 50); }, [mapH]);
+
+    // ── PARKING LAYER ──
+    const toggleParking = useCallback(async () => {
+        if (!leaflet.current) return;
+        const next = !layersRef.current.parking;
+        layersRef.current = {...layersRef.current, parking: next};
+        setLayers(p => ({...p, parking: next}));
+
+        if (!next) {
+            parkingMarkers.current.forEach(m => m.remove());
+            parkingMarkers.current = [];
+            return;
+        }
+
+        setParkingLoading(true);
         try {
-            if (msg.additions && msg.additions.length > 0) {
-                for (const item of msg.additions) {
-                    await saveItem({ ...item, lat: parseFloat(item.lat), lng: parseFloat(item.lng) }, false);
+            const bounds = leaflet.current.getBounds();
+            const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+            const query = `[out:json][timeout:15];(node["amenity"="parking"](${bbox});way["amenity"="parking"](${bbox}););out center 60;`;
+            const r = await fetch('https://overpass-api.de/api/interpreter', {
+                method:'POST', body: 'data=' + encodeURIComponent(query),
+                signal: AbortSignal.timeout(18000)
+            });
+            const d = await r.json();
+            parkingMarkers.current.forEach(m => m.remove());
+            parkingMarkers.current = [];
+
+            (d.elements || []).forEach(el => {
+                const lat = el.lat ?? el.center?.lat;
+                const lng = el.lon ?? el.center?.lon;
+                if (!lat || !lng) return;
+                const icon = L.divIcon({
+                    html:`<div style="background:#1e293b;color:white;border-radius:8px;padding:3px 6px;font-size:10px;font-weight:900;font-family:'Noto Sans TC',sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.3);white-space:nowrap;display:flex;align-items:center;gap:3px;"><span style="font-size:13px;">🅿</span></div>`,
+                    className:'', iconAnchor:[20,16]
+                });
+                const fee = el.tags?.fee === 'yes' ? '收費' : el.tags?.fee === 'no' ? '免費' : '不明';
+                const capacity = el.tags?.capacity ? `${el.tags.capacity} 位` : '';
+                const m = L.marker([lat,lng], {icon}).addTo(leaflet.current).bindPopup(
+                    `<div class="popup-content"><div style="font-size:13px;font-weight:800;color:#1e293b;margin-bottom:4px;">🅿 停車場</div><div style="font-size:12px;color:#64748b;">${fee}${capacity ? ' · '+capacity : ''}</div>${el.tags?.name?`<div style="font-size:11px;margin-top:4px;color:#94a3b8;">${el.tags.name}</div>`:''}</div>`,
+                    {closeButton:false}
+                );
+                parkingMarkers.current.push(m);
+            });
+        } catch(e) {
+            console.warn('Overpass API error', e);
+        }
+        setParkingLoading(false);
+    }, []);
+
+    // ── WEATHER LAYER ──
+    const toggleWeather = useCallback(async () => {
+        if (!leaflet.current) return;
+        const next = !layersRef.current.weather;
+        layersRef.current = {...layersRef.current, weather: next};
+        setLayers(p => ({...p, weather: next}));
+
+        if (!next) {
+            weatherMarkers.current.forEach(m => m.remove());
+            weatherMarkers.current = [];
+            return;
+        }
+
+        setWeatherLoading(true);
+        const newData = {};
+
+        if (!OWM_KEY) {
+            // Demo mode: show mock weather if no API key
+            const mocks = [
+                {name:'那霸',   temp:27, desc:'晴天', icon:'☀️', humidity:72, wind:4.2, lat:26.2124, lng:127.6809},
+                {name:'沖繩市', temp:26, desc:'多雲', icon:'⛅', humidity:78, wind:3.8, lat:26.3344, lng:127.8056},
+                {name:'名護',   temp:25, desc:'陣雨', icon:'🌦️', humidity:85, wind:5.1, lat:26.5912, lng:127.9776},
+                {name:'糸満',   temp:27, desc:'晴天', icon:'☀️', humidity:70, wind:3.5, lat:26.1243, lng:127.6657},
+                {name:'宜野灣', temp:26, desc:'多雲', icon:'⛅', humidity:75, wind:4.0, lat:26.2816, lng:127.7783},
+            ];
+            weatherMarkers.current.forEach(m => m.remove());
+            weatherMarkers.current = [];
+            mocks.forEach(w => {
+                newData[w.name] = w;
+                const icon = L.divIcon({
+                    html:`<div style="background:white;border:1.5px solid #e2e8f0;border-radius:12px;padding:6px 10px;box-shadow:0 2px 10px rgba(0,0,0,.12);font-family:'Noto Sans TC',sans-serif;text-align:center;min-width:72px;">
+                        <div style="font-size:18px;line-height:1;">${w.icon}</div>
+                        <div style="font-size:13px;font-weight:900;color:#1e293b;margin-top:2px;">${w.temp}°C</div>
+                        <div style="font-size:10px;font-weight:700;color:#64748b;">${w.name}</div>
+                    </div>`,
+                    className:'', iconAnchor:[36,60]
+                });
+                const m = L.marker([w.lat, w.lng], {icon}).addTo(leaflet.current).bindPopup(
+                    `<div class="popup-content">
+                        <div style="font-size:24px;text-align:center;margin-bottom:6px;">${w.icon}</div>
+                        <div style="font-size:14px;font-weight:900;color:#1e293b;text-align:center;">${w.name}</div>
+                        <div style="font-size:22px;font-weight:900;text-align:center;margin:6px 0;">${w.temp}°C</div>
+                        <div style="font-size:12px;color:#64748b;text-align:center;">${w.desc}</div>
+                        <div style="display:flex;justify-content:center;gap:12px;margin-top:8px;font-size:11px;font-weight:700;color:#94a3b8;">
+                            <span>💧 ${w.humidity}%</span><span>💨 ${w.wind} m/s</span>
+                        </div>
+                    </div>`,
+                    {closeButton:false}
+                );
+                weatherMarkers.current.push(m);
+            });
+            setWeatherLoading(false);
+            return;
+        }
+
+        // Real OWM API
+        weatherMarkers.current.forEach(m => m.remove());
+        weatherMarkers.current = [];
+        await Promise.all(OWM_CITIES.map(async city => {
+            try {
+                const r = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${city.lat}&lon=${city.lng}&appid=${OWM_KEY}&units=metric&lang=zh_tw`);
+                const d = await r.json();
+                if (d.cod !== 200 && d.cod !== '200') return;
+                const w = {
+                    name: city.name,
+                    temp: Math.round(d.main.temp),
+                    desc: d.weather[0].description,
+                    icon: `https://openweathermap.org/img/wn/${d.weather[0].icon}@2x.png`,
+                    humidity: d.main.humidity,
+                    wind: d.wind.speed.toFixed(1),
+                    lat: city.lat, lng: city.lng
+                };
+                newData[city.name] = w;
+                const icon = L.divIcon({
+                    html:`<div style="background:white;border:1.5px solid #e2e8f0;border-radius:12px;padding:6px 10px;box-shadow:0 2px 10px rgba(0,0,0,.12);font-family:'Noto Sans TC',sans-serif;text-align:center;min-width:72px;">
+                        <img src="${w.icon}" style="width:32px;height:32px;" />
+                        <div style="font-size:13px;font-weight:900;color:#1e293b;margin-top:1px;">${w.temp}°C</div>
+                        <div style="font-size:10px;font-weight:700;color:#64748b;">${w.name}</div>
+                    </div>`,
+                    className:'', iconAnchor:[36,70]
+                });
+                const m = L.marker([city.lat, city.lng], {icon}).addTo(leaflet.current).bindPopup(
+                    `<div class="popup-content">
+                        <div style="text-align:center;margin-bottom:4px;"><img src="${w.icon}" style="width:48px;height:48px;"/></div>
+                        <div style="font-size:14px;font-weight:900;color:#1e293b;text-align:center;">${w.name}</div>
+                        <div style="font-size:22px;font-weight:900;text-align:center;margin:4px 0;">${w.temp}°C</div>
+                        <div style="font-size:12px;color:#64748b;text-align:center;">${w.desc}</div>
+                        <div style="display:flex;justify-content:center;gap:12px;margin-top:8px;font-size:11px;font-weight:700;color:#94a3b8;">
+                            <span>💧 ${w.humidity}%</span><span>💨 ${w.wind} m/s</span>
+                        </div>
+                    </div>`,
+                    {closeButton:false}
+                );
+                weatherMarkers.current.push(m);
+            } catch(e) { console.warn('OWM error', e); }
+        }));
+        setWeatherLoading(false);
+    }, []);
+
+    // ── ITINERARY MARKERS + ROUTES ──
+    useEffect(() => {
+        if (!leaflet.current) return;
+        const key = JSON.stringify({viewMode, activeDay, routeDays, items:itinerary.map(i=>i.id+i.time+i.day)});
+        if (key === lastKey.current) return;
+        lastKey.current = key;
+        let cancelled = false;
+
+        Object.values(markers.current).forEach(m => m.remove());
+        markers.current = {};
+        lines.current.forEach(l => l.remove());
+        lines.current = [];
+        leaflet.current.invalidateSize();
+
+        const days = viewMode === 'route' ? routeDays : [activeDay];
+        const allLL = [];
+
+        const run = async () => {
+            const newMetrics = {};
+            await Promise.all(days.map(async day => {
+                const items = itinerary.filter(i=>i.day===day).sort((a,b)=>a.time.localeCompare(b.time));
+                const valid = items.filter(i=>i.lat&&i.lng);
+                if (!valid.length) return;
+
+                valid.forEach((item, idx) => {
+                    const sub = SUB_TYPES[item.subType] || SUB_TYPES.attraction;
+                    const bw  = item.type==='backup' ? '#f59e0b' : '#fff';
+                    const html = viewMode==='route'
+                        ? `<div class="map-marker" style="background:${DAY_COLORS[day]};width:24px;height:24px;border-radius:50%;border:2.5px solid ${bw};box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:900;font-family:'Noto Sans TC',sans-serif;">${idx+1}</div>`
+                        : `<div class="map-marker" style="background:${sub.color};width:14px;height:14px;border-radius:50%;border:2.5px solid ${bw};box-shadow:0 2px 6px rgba(0,0,0,.25);"></div>`;
+                    const icon = L.divIcon({html, className:'', iconSize:[24,24], iconAnchor:[12,12]});
+                    const popup = `<div class="popup-content">
+                        <span class="badge" style="background:${sub.bg};color:${sub.text};margin-bottom:8px;">${sub.label}</span>
+                        <div style="font-size:14px;font-weight:800;color:#1e293b;line-height:1.3;">${item.location||item.content}</div>
+                        ${item.location&&item.content!==item.location?`<div style="font-size:12px;color:#64748b;margin-top:4px;line-height:1.4;">${item.content}</div>`:''}
+                        <a href="${item.url}" target="_blank" rel="noopener" class="popup-nav">導航 →</a>
+                    </div>`;
+                    const m = L.marker([item.lat,item.lng],{icon}).addTo(leaflet.current).bindPopup(popup,{closeButton:false,autoPanPadding:[30,30]});
+                    markers.current[item.id] = m;
+                    allLL.push([item.lat,item.lng]);
+                });
+
+                if (valid.length < 2) return;
+                try {
+                    const coords = valid.map(i=>`${i.lng},${i.lat}`).join(';');
+                    const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`,{signal:AbortSignal.timeout(8000)});
+                    const d = await r.json();
+                    if (cancelled) return;
+                    if (d.code==='Ok') {
+                        const ll = d.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
+                        lines.current.push(L.polyline(ll,{color:DAY_COLORS[day],weight:4,opacity:.65,className:'route-animated'}).addTo(leaflet.current));
+                        newMetrics[day] = d.routes[0].legs;
+                    }
+                } catch {
+                    if (!cancelled) lines.current.push(L.polyline(valid.map(i=>[i.lat,i.lng]),{color:DAY_COLORS[day],weight:3,opacity:.45,dashArray:'8 6'}).addTo(leaflet.current));
                 }
-            }
-            if (msg.updates && msg.updates.length > 0) {
-                await batchUpdate(msg.updates);
-            }
-            showToast("✅ AI 建議已成功套用至您的行程表中！");
-            setHistory(p => p.map((m, i) => i === msgIndex ? { ...m, applied: true } : m));
-        } catch (e) {
-            showToast("❌ 套用失敗：" + e.message);
-        }
-    };
+            }));
+            if (cancelled) return;
+            onMetrics(newMetrics);
+            if (allLL.length>0) leaflet.current.fitBounds(L.latLngBounds(allLL),{padding:[50,50],maxZoom:15});
+        };
+        run();
+        return () => { cancelled=true; };
+    }, [itinerary, viewMode, activeDay, routeDays]);
+
+    useEffect(() => {
+        if (!focusTarget || !leaflet.current) return;
+        leaflet.current.setView([focusTarget.lat, focusTarget.lng], 15, {animate:true});
+        setTimeout(() => markers.current[focusTarget.id]?.openPopup(), 300);
+    }, [focusTarget]);
 
     return (
-        <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-slate-50 rounded-[24px] w-full max-w-lg h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
-                <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 text-white flex justify-between items-center shadow-md z-10">
-                    <h2 className="text-base md:text-lg font-black flex items-center gap-2"><Icon name="sparkles" className="w-5 h-5"/> AI 排程助手</h2>
-                    <button onClick={onClose} className="hover:bg-white/20 p-1.5 rounded-full transition-colors"><Icon name="x" className="w-5 h-5"/></button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                    {history.map((msg, i) => (
-                        <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[85%] p-3 md:p-4 rounded-2xl shadow-sm text-sm md:text-base leading-relaxed ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-700 rounded-tl-sm'}`}>
-                                <div className="whitespace-pre-wrap font-medium">{msg.content}</div>
-                                {(msg.additions?.length > 0 || msg.updates?.length > 0) && (
-                                    <div className="mt-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                                        <p className="text-xs font-bold text-slate-500 mb-2">💡 AI 提議的變更：</p>
-                                        {msg.additions?.length > 0 && <p className="text-sm font-bold text-emerald-600">✨ 新增 {msg.additions.length} 個行程</p>}
-                                        {msg.updates?.length > 0 && <p className="text-sm font-bold text-blue-600">🔄 調整 {msg.updates.length} 個行程時間</p>}
-                                        <button
-                                            onClick={() => handleApply(i)}
-                                            disabled={msg.applied}
-                                            className={`mt-2 w-full py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-1 transition-all ${msg.applied ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 shadow-md'}`}
-                                        >
-                                            {msg.applied ? <><Icon name="check" className="w-4 h-4"/> 已成功套用</> : <><Icon name="zap" className="w-4 h-4"/> 點擊一鍵套用變更</>}
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                    {isLoading && (
-                        <div className="flex justify-start">
-                            <div className="bg-white border border-slate-200 text-slate-500 rounded-2xl rounded-tl-sm p-3 shadow-sm flex items-center gap-2 font-bold text-sm">
-                                <Icon name="loader-2" className="w-4 h-4 icon-spin text-purple-600" /> 正在分析行程與規劃中...
-                            </div>
-                        </div>
-                    )}
-                    <div ref={chatEndRef} />
-                </div>
-                <div className="p-3 md:p-4 bg-white border-t border-slate-200 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] z-10">
-                    <div className="flex gap-2">
-                        <input
-                            type="text"
-                            value={input}
-                            onChange={e => setInput(e.target.value)}
-                            onKeyPress={e => e.key === 'Enter' && handleSend()}
-                            placeholder="輸入需求 (例：幫我排順第三天)"
-                            className="flex-1 bg-slate-100 border-transparent focus:bg-white focus:border-purple-500 border-2 rounded-xl px-4 py-2.5 outline-none transition-all font-medium text-slate-700 text-sm md:text-base"
-                        />
-                        <button
-                            onClick={handleSend}
-                            disabled={!input.trim() || isLoading}
-                            className="bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center"
-                        >
-                            <Icon name="send" className="w-5 h-5" />
+        <div style={{position:'relative', flex:isMobile?'none':'1', height:isMobile?`${mapH}vh`:'100%'}}>
+            <div ref={mapEl} style={{position:'absolute', inset:0}} />
+
+            {/* Layer controls */}
+            <div className="map-layer-controls" style={{position:'absolute', top:12, right:12, zIndex:1000, display:'flex', flexDirection:'column', gap:7}}>
+                <button className={`layer-btn ${layers.parking?'on':''}`}
+                    onClick={toggleParking}
+                    style={{color: layers.parking?'#1e293b':'var(--text-muted)', borderColor: layers.parking?'#1e293b':'var(--border)'}}>
+                    {parkingLoading ? <span className="spin" style={{fontSize:14}}>⟳</span> : <span style={{fontSize:14}}>🅿</span>}
+                    停車場
+                    <span style={{width:8,height:8,borderRadius:'50%',background:layers.parking?'#10b981':'#cbd5e1',flexShrink:0}} />
+                </button>
+                <button className={`layer-btn ${layers.weather?'on':''}`}
+                    onClick={toggleWeather}
+                    style={{color: layers.weather?'#0369a1':'var(--text-muted)', borderColor: layers.weather?'#0369a1':'var(--border)'}}>
+                    {weatherLoading ? <span className="spin" style={{fontSize:14}}>⟳</span> : <span style={{fontSize:14}}>🌤</span>}
+                    天氣
+                    <span style={{width:8,height:8,borderRadius:'50%',background:layers.weather?'#10b981':'#cbd5e1',flexShrink:0}} />
+                </button>
+                {!OWM_KEY && layers.weather && (
+                    <div style={{background:'#fffbeb',border:'1.5px solid #fcd34d',borderRadius:9,padding:'5px 8px',fontSize:10,fontWeight:700,color:'#92400e',maxWidth:130,lineHeight:1.4}}>
+                        ⚠️ 示範模式<br/>請設定 OWM_KEY 使用真實天氣
+                    </div>
+                )}
+            </div>
+
+            {/* Legend */}
+            <div style={{position:'absolute',bottom:14,right:14,zIndex:1000,background:'rgba(255,255,255,.95)',backdropFilter:'blur(8px)',borderRadius:12,padding:'10px 13px',boxShadow:'0 2px 12px rgba(0,0,0,.1)',border:'1px solid var(--border)'}}>
+                <div style={{fontSize:10,fontWeight:800,color:'var(--text-muted)',marginBottom:7,textTransform:'uppercase',letterSpacing:'.05em'}}>圖例</div>
+                {viewMode==='itinerary'
+                    ? Object.values(SUB_TYPES).map(s=>(
+                        <div key={s.label} style={{display:'flex',alignItems:'center',gap:7,marginBottom:3}}>
+                            <div style={{width:10,height:10,borderRadius:'50%',background:s.color,border:'2px solid white',boxShadow:'0 1px 3px rgba(0,0,0,.15)',flexShrink:0}}/>
+                            <span style={{fontSize:11,fontWeight:700,color:'var(--text-muted)'}}>{s.label}</span>
+                        </div>))
+                    : Object.entries(DAY_COLORS).filter(([d])=>routeDays.includes(+d)).map(([d,c])=>(
+                        <div key={d} style={{display:'flex',alignItems:'center',gap:7,marginBottom:3}}>
+                            <div style={{width:18,height:18,borderRadius:'50%',background:c,display:'flex',alignItems:'center',justifyContent:'center',color:'white',fontSize:9,fontWeight:900}}>{d}</div>
+                            <span style={{fontSize:11,fontWeight:700,color:'var(--text-muted)'}}>Day {d}</span>
+                        </div>))
+                }
+            </div>
+        </div>
+    );
+}, (prev, next) =>
+    prev.viewMode===next.viewMode && prev.activeDay===next.activeDay &&
+    prev.mapH===next.mapH && prev.isMobile===next.isMobile &&
+    JSON.stringify(prev.routeDays)===JSON.stringify(next.routeDays) &&
+    JSON.stringify(prev.focusTarget)===JSON.stringify(next.focusTarget) &&
+    prev.itinerary.length===next.itinerary.length &&
+    prev.itinerary.every((it,i)=>it.id===next.itinerary[i]?.id&&it.time===next.itinerary[i]?.time&&it.day===next.itinerary[i]?.day)
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRIP CARD
+// ─────────────────────────────────────────────────────────────────────────────
+const TripCard = memo(({item, onEdit, onDelete, onShift, onFocus, onDragStart, onDrop, onTouchStart, onTouchMove, onTouchEnd, dragging}) => {
+    const sub = SUB_TYPES[item.subType] || SUB_TYPES.attraction;
+    return (
+        <div className={`trip-card fade-in ${dragging?'touch-dragging':''}`}
+            draggable onDragStart={onDragStart}
+            onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('drag-over');}}
+            onDragLeave={e=>e.currentTarget.classList.remove('drag-over')}
+            onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drag-over');onDrop();}}
+            onTouchStart={onTouchStart}
+            onTouchMove={e=>{if(onTouchMove)onTouchMove(e,item.id);}}
+            onTouchEnd={onTouchEnd}
+            onClick={onFocus}
+            style={{WebkitUserSelect:'none',userSelect:'none'}}>
+            <div style={{position:'absolute',left:0,top:0,bottom:0,width:4,background:sub.color,borderRadius:'14px 0 0 14px'}}/>
+            <div style={{padding:'11px 11px 11px 14px'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:7,gap:6}}>
+                    <div style={{display:'flex',gap:5,flexWrap:'wrap',alignItems:'center',flex:1,minWidth:0}}>
+                        <span style={{fontSize:12,fontWeight:800,color:'var(--text-muted)',background:'var(--bg)',padding:'2px 8px',borderRadius:6,display:'flex',alignItems:'center',gap:3,flexShrink:0}}>
+                            <Icon name="clock" size={11}/>{item.time}
+                        </span>
+                        <span className="badge" style={{background:sub.bg,color:sub.text,flexShrink:0}}>
+                            <Icon name={sub.icon} size={11}/>{sub.label}
+                        </span>
+                        {item.type==='backup'&&<span className="badge" style={{background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',flexShrink:0}}>備選</span>}
+                    </div>
+                    <div style={{display:'flex',gap:1,flexShrink:0}}>
+                        <button onClick={e=>{e.stopPropagation();onShift();}} title="順延此後行程 30 分"
+                            style={{padding:'3px 6px',borderRadius:6,border:'none',background:'transparent',cursor:'pointer',fontSize:11,fontWeight:800,color:'#6366f1'}}
+                            onMouseEnter={e=>e.target.style.background='#eef2ff'} onMouseLeave={e=>e.target.style.background='transparent'}>+30分</button>
+                        <button onClick={e=>{e.stopPropagation();onEdit();}}
+                            style={{padding:4,borderRadius:6,border:'none',background:'transparent',cursor:'pointer',color:'var(--text-muted)'}}
+                            onMouseEnter={e=>e.currentTarget.style.background='var(--bg)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                            <Icon name="pencil" size={13}/>
+                        </button>
+                        <button onClick={e=>{e.stopPropagation();onDelete();}}
+                            style={{padding:4,borderRadius:6,border:'none',background:'transparent',cursor:'pointer',color:'#fca5a5'}}
+                            onMouseEnter={e=>{e.currentTarget.style.background='#fef2f2';e.currentTarget.style.color='#ef4444';}}
+                            onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='#fca5a5';}}>
+                            <Icon name="trash-2" size={13}/>
                         </button>
                     </div>
+                </div>
+                <div style={{fontSize:14,fontWeight:800,color:'var(--text)',lineHeight:1.35,marginBottom:7}}>{item.content}</div>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                    <span style={{fontSize:11,fontWeight:700,color:'var(--text-muted)',background:'var(--bg)',border:'1px solid var(--border)',padding:'2px 8px',borderRadius:6,display:'flex',alignItems:'center',gap:3}}>
+                        <Icon name="user" size={11}/>{item.member}
+                    </span>
+                    {item.location&&(
+                        <span style={{fontSize:11,fontWeight:700,color:sub.text,background:sub.bg,padding:'2px 8px',borderRadius:6,display:'flex',alignItems:'center',gap:3,maxWidth:170,overflow:'hidden'}}>
+                            <Icon name="map-pin" size={11}/>
+                            <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.location}</span>
+                        </span>
+                    )}
                 </div>
             </div>
         </div>
     );
-};
-        const App = () => {
-            const { itinerary, loading, isLocalMode, saveItem, deleteItem, batchUpdate } = useFirebase();
-            const [viewMode, setViewMode] = useState('itinerary'); 
-            const [activeDay, setActiveDay] = useState(1);
-            const [routeDays, setRouteDays] = useState([1, 2, 3, 4, 5, 6]);
-            const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-            const [mapHeightVH, setMapHeightVH] = useState(40);
-            
-            const [toastMsg, setToastMsg] = useState({ msg: '', show: false });
-            const [selectedLocation, setSelectedLocation] = useState(null);
-            const [routeMetrics, setRouteMetrics] = useState({});
-            const [isAiModalOpen, setIsAiModalOpen] = useState(false);
-            
-            const [isModalOpen, setIsModalOpen] = useState(false);
-            const [editingItem, setEditingItem] = useState(null);
-            const [urlWarning, setUrlWarning] = useState("");
-            const [isGenerating, setIsGenerating] = useState(false);
-            const [formData, setFormData] = useState({ day: 1, time: '09:00', content: '', location: '', url: '', lat: 26.2124, lng: 127.6809, member: MEMBERS[0], type: 'main', subType: 'attraction' });
+});
 
-            useEffect(() => {
-                const handleResize = () => setIsMobile(window.innerWidth < 768);
-                window.addEventListener('resize', handleResize);
-                return () => window.removeEventListener('resize', handleResize);
-            }, []);
+// ─────────────────────────────────────────────────────────────────────────────
+// ITINERARY SIDEBAR
+// ─────────────────────────────────────────────────────────────────────────────
+const ItinerarySidebar = ({itinerary, viewMode, activeDay, setActiveDay, routeDays, toggleRouteDay, onEdit, onDelete, onShift, onDragDrop, onFocus, metrics, showToast}) => {
+    const [dragId, setDragId] = useState(null);
+    const touchDragRef = useRef({active:false, startId:null, startY:0, currentY:0, clone:null, targetId:null});
 
-            const showToast = (msg) => { setToastMsg({ msg, show: true }); setTimeout(() => setToastMsg({ msg: '', show: false }), 3000); };
+    // Touch drag handlers
+    const handleTouchStart = useCallback((e, itemId) => {
+        // Only activate on long-press (400ms)
+        const touch = e.touches[0];
+        const timer = setTimeout(() => {
+            touchDragRef.current = {active:true, startId:itemId, startY:touch.clientY, currentY:touch.clientY, clone:null, targetId:null};
+            setDragId(itemId);
+            if (navigator.vibrate) navigator.vibrate(30);
+        }, 400);
+        // Cancel if finger moves too early
+        const cancel = () => { clearTimeout(timer); };
+        e.target.addEventListener('touchmove', cancel, {once:true, passive:true});
+        e.target.addEventListener('touchend', cancel, {once:true, passive:true});
+    }, []);
 
-            const handleMapDragStart = (e) => {
-                if (e.type === 'mousedown' && e.button !== 0) return;
-                const startY = e.touches ? e.touches[0].clientY : e.clientY;
-                const startVh = mapHeightVH;
-                const vhPixels = window.innerHeight / 100;
-                const handleMove = (moveEvent) => {
-                    if (moveEvent.cancelable) moveEvent.preventDefault();
-                    const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
-                    setMapHeightVH(Math.max(15, Math.min(startVh + ((currentY - startY) / vhPixels), 75)));
-                };
-                const handleEnd = () => {
-                    window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleEnd);
-                    window.removeEventListener('touchmove', handleMove); window.removeEventListener('touchend', handleEnd);
-                };
-                window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', handleEnd);
-                window.addEventListener('touchmove', handleMove, { passive: false }); window.addEventListener('touchend', handleEnd);
-            };
+    const handleTouchMove = useCallback((e, itemId) => {
+        if (!touchDragRef.current.active) return;
+        e.preventDefault();
+        touchDragRef.current.currentY = e.touches[0].clientY;
+        touchDragRef.current.targetId = itemId;
+    }, []);
 
-            const handleDragDrop = async (draggedId, targetId) => {
-                const draggedItem = itinerary.find(i => i.id === draggedId);
-                const targetItem = itinerary.find(i => i.id === targetId);
-                if (!draggedItem || !targetItem) return;
-                await batchUpdate([{ id: draggedId, time: targetItem.time }, { id: targetId, time: draggedItem.time }]);
-            };
+    const handleTouchEnd = useCallback((e) => {
+        if (!touchDragRef.current.active) return;
+        const {startId, targetId} = touchDragRef.current;
+        touchDragRef.current = {active:false, startId:null, startY:0, currentY:0, clone:null, targetId:null};
+        setDragId(null);
+        if (startId && targetId && startId !== targetId) {
+            onDragDrop(startId, targetId);
+        }
+    }, [onDragDrop]);
+    const dayItems = useMemo(()=>itinerary.filter(i=>i.day===activeDay).sort((a,b)=>a.time.localeCompare(b.time)),[itinerary,activeDay]);
 
-            const handleShiftTime = async (startItemId, shiftMinutes = 30) => {
-                const dayItems = itinerary.filter(i => i.day === activeDay).sort((a,b)=>a.time.localeCompare(b.time));
-                const startIndex = dayItems.findIndex(i => i.id === startItemId);
-                if(startIndex === -1) return;
-                const updates = [];
-                for(let i = startIndex; i < dayItems.length; i++) {
-                    const item = dayItems[i];
-                    const [hh, mm] = item.time.split(':').map(Number);
-                    const d = new Date(2000, 0, 1, hh, mm);
-                    d.setMinutes(d.getMinutes() + shiftMinutes);
-                    updates.push({ id: item.id, time: `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` });
-                }
-                await batchUpdate(updates);
-                showToast(`✅ 已將此行程與後續行程順延 ${shiftMinutes} 分鐘`);
-            };
+    const handleCopy = () => {
+        const txt = dayItems.map(i=>`[${i.time}] ${i.location||i.content}${i.location&&i.content!==i.location?'\n  '+i.content:''}`).join('\n');
+        const full = `🏝 沖繩自駕 Day ${activeDay}\n${txt}`;
+        navigator.clipboard?.writeText(full).catch(()=>{
+            const el=Object.assign(document.createElement('textarea'),{value:full});
+            document.body.appendChild(el);el.select();document.execCommand('copy');document.body.removeChild(el);
+        });
+        showToast('已複製 Day '+activeDay+' 行程');
+    };
+    const handleNav = () => {
+        const items = dayItems.filter(i=>i.lat&&i.lng);
+        if (items.length<2) return showToast('⚠️ 需至少兩個含座標地點才能導航');
+        const origin=`${items[0].lat},${items[0].lng}`,dest=`${items.at(-1).lat},${items.at(-1).lng}`;
+        const wps=items.slice(1,-1).map(i=>`${i.lat},${i.lng}`).join('|');
+        window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=driving${wps?`&waypoints=${wps}`:''}`, '_blank');
+    };
 
-            const handleGenerateContent = async () => {
-                if (!formData.location) return;
-                setIsGenerating(true);
-                const result = await callGeminiWithBackoff(`你是專業旅遊達人。請為沖繩景點「${formData.location}」寫一句吸引人的行程短描述。繁體中文，限 15 字以內，不要引號。`);
-                setFormData(p => ({ ...p, content: result.trim() }));
-                setIsGenerating(false);
-            };
-
-            const handleUrlBlur = (e) => {
-                const url = e.target.value;
-                if (!url) return setUrlWarning("");
-                const mAt = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/), m3d = url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
-                if (mAt) { setFormData(p => ({...p, lat: parseFloat(mAt[1]), lng: parseFloat(mAt[2])})); setUrlWarning(""); }
-                else if (m3d) { setFormData(p => ({...p, lat: parseFloat(m3d[1]), lng: parseFloat(m3d[2])})); setUrlWarning(""); }
-                else if (url.includes('goo.gl') || url.includes('maps.app.goo.gl')) setUrlWarning('短網址無法自動解析！請手動填寫。');
-                else setUrlWarning('無法從此網址找到座標，請手動填寫！');
-            };
-
-            const handleSaveForm = async (e) => {
-                e.preventDefault();
-                const { id, ...cleanData } = formData;
-                const data = { ...cleanData, day: parseInt(formData.day), lat: parseFloat(formData.lat) || 26.2124, lng: parseFloat(formData.lng) || 127.6809 };
-                if (editingItem) data.id = editingItem.id;
-                await saveItem(data, !!editingItem);
-                setIsModalOpen(false); setEditingItem(null);
-                setFormData({ day: activeDay, time: '09:00', content: '', location: '', url: '', lat: 26.2124, lng: 127.6809, member: MEMBERS[0], type: 'main', subType: 'attraction' });
-            };
-
-            if (loading) return <div className="flex h-full items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div></div>;
-
-            return (
-                <div className="h-full flex flex-col w-full bg-slate-50">
-                    <Toast message={toastMsg.msg} visible={toastMsg.show} />
-                    <Header isLocalMode={isLocalMode} viewMode={viewMode} setViewMode={setViewMode} onOpenModal={() => { setEditingItem(null); setIsModalOpen(true); setUrlWarning(""); }} onOpenAiModal={() => setIsAiModalOpen(true)} />
-                    
-                    <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-                        <MapArea itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} routeDays={routeDays} selectedLocation={selectedLocation} isMobile={isMobile} mapHeightVH={mapHeightVH} setRouteMetrics={setRouteMetrics} />
-                        {isMobile && <div className="w-full h-4 bg-slate-100 flex items-center justify-center cursor-row-resize z-20 order-2 flex-shrink-0 border-y border-slate-200 touch-none relative" onMouseDown={handleMapDragStart} onTouchStart={handleMapDragStart}><div className="w-10 h-1 bg-slate-300 rounded-full"></div><div className="absolute inset-x-0 -top-3 -bottom-3"></div></div>}
-                        <Sidebar itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} setActiveDay={setActiveDay} routeDays={routeDays} toggleRouteDay={(d) => setRouteDays(p => p.includes(d) ? p.filter(x=>x!==d) : [...p,d].sort())} onEdit={(i) => { setEditingItem(i); setFormData(i); setIsModalOpen(true); }} onDelete={id => confirm('確定要刪除嗎？') && deleteItem(id)} onShiftTime={handleShiftTime} onDragDrop={handleDragDrop} onFocus={setSelectedLocation} routeMetrics={routeMetrics} showToast={showToast} />
+    return (
+        <div style={{width:'100%',display:'flex',flexDirection:'column',background:'var(--surface2)',overflow:'hidden',flexShrink:0}}>
+            {viewMode==='itinerary' ? (<>
+                <div style={{padding:'10px 12px',borderBottom:'1px solid var(--border)',background:'white',display:'flex',gap:6,alignItems:'center',overflowX:'auto'}} className="scroll">
+                    {[1,2,3,4,5,6].map(d=><button key={d} className={`day-tab ${activeDay===d?'active':'inactive'}`} onClick={()=>setActiveDay(d)}>D{d}</button>)}
+                    <div style={{flex:1,minWidth:6}}/>
+                    <button className="btn-ghost" onClick={handleCopy} style={{flexShrink:0}}><Icon name="copy" size={12}/>複製</button>
+                    <button className="btn-ghost" onClick={handleNav}  style={{flexShrink:0}}><Icon name="navigation" size={12} color="#0ea5e9"/>導航</button>
+                </div>
+                <div className="scroll" style={{flex:1,overflowY:'auto',padding:'10px 10px 80px',display:'flex',flexDirection:'column',gap:8}}>
+                    {dayItems.length===0 ? (
+                        <div style={{textAlign:'center',padding:'50px 20px',color:'var(--text-faint)'}}>
+                            <Icon name="calendar-plus" size={36} color="var(--text-faint)"/>
+                            <div style={{marginTop:12,fontSize:14,fontWeight:700}}>這天還沒有行程</div>
+                            <div style={{fontSize:12,marginTop:4}}>點右上角 ＋ 新增</div>
+                        </div>
+                    ) : (<>
+                        <div style={{textAlign:'center',fontSize:11,color:'var(--text-faint)',fontWeight:700,padding:'2px 0'}}>拖曳卡片可重新排序</div>
+                        {dayItems.map(item=>(
+                            <TripCard key={item.id} item={item} dragging={dragId===item.id}
+                                onDragStart={()=>setDragId(item.id)}
+                                onDrop={()=>{onDragDrop(dragId,item.id);setDragId(null);}}
+                                onTouchStart={(e)=>handleTouchStart(e,item.id)}
+                                onTouchMove={(e)=>handleTouchMove(e,item.id)}
+                                onTouchEnd={handleTouchEnd}
+                                onEdit={()=>onEdit(item)}
+                                onDelete={()=>{if(confirm(`確定刪除「${item.content}」？`))onDelete(item.id);}}
+                                onShift={()=>onShift(item.id)} onFocus={()=>onFocus(item)}/>
+                        ))}
+                    </>)}
+                </div>
+            </>) : (<>
+                <div style={{padding:'12px 14px',borderBottom:'1px solid var(--border)',background:'white'}}>
+                    <div style={{fontSize:13,fontWeight:800,color:'var(--text)',marginBottom:10,display:'flex',alignItems:'center',gap:7}}>
+                        <Icon name="route" size={15} color="#0ea5e9"/>顯示路線
                     </div>
-                    {/* ✨ 載入 AI 對話面板元件 */}
-<AiAssistant isOpen={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} itinerary={itinerary} saveItem={saveItem} batchUpdate={batchUpdate} showToast={showToast} />
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:7}}>
+                        {[1,2,3,4,5,6].map(d=>(
+                            <label key={d} style={{display:'flex',alignItems:'center',gap:7,padding:'7px 9px',borderRadius:9,border:`1.5px solid ${routeDays.includes(d)?DAY_COLORS[d]:'var(--border)'}`,background:routeDays.includes(d)?`${DAY_COLORS[d]}14`:'white',cursor:'pointer',transition:'all .15s',userSelect:'none'}}>
+                                <input type="checkbox" checked={routeDays.includes(d)} onChange={()=>toggleRouteDay(d)} style={{width:13,height:13,accentColor:DAY_COLORS[d]}}/>
+                                <div style={{width:9,height:9,borderRadius:'50%',background:DAY_COLORS[d],flexShrink:0}}/>
+                                <span style={{fontSize:12,fontWeight:800,color:'var(--text)'}}>D{d}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+                <div className="scroll" style={{flex:1,overflowY:'auto',padding:'12px 13px 80px',display:'flex',flexDirection:'column',gap:18}}>
+                    {routeDays.map(d=>{
+                        const items=itinerary.filter(i=>i.day===d).sort((a,b)=>a.time.localeCompare(b.time));
+                        if(!items.length) return null;
+                        return (
+                            <div key={d}>
+                                <div style={{fontSize:12,fontWeight:900,color:DAY_COLORS[d],display:'flex',alignItems:'center',gap:7,marginBottom:10,padding:'5px 9px',background:`${DAY_COLORS[d]}12`,borderRadius:8,border:`1.5px solid ${DAY_COLORS[d]}30`,width:'fit-content'}}>
+                                    <div style={{width:7,height:7,borderRadius:'50%',background:DAY_COLORS[d]}}/>Day {d} 路線
+                                </div>
+                                {items.map((item,idx)=>(
+                                    <div key={item.id}>
+                                        <div className="route-stop" onClick={()=>onFocus(item)}>
+                                            <div style={{width:26,height:26,borderRadius:'50%',background:DAY_COLORS[d],color:'white',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:900,flexShrink:0,marginTop:2,boxShadow:`0 2px 8px ${DAY_COLORS[d]}50`}}>{idx+1}</div>
+                                            <div className="stop-card">
+                                                <div style={{fontSize:11,fontWeight:700,color:'var(--text-faint)',marginBottom:2}}>{item.time}</div>
+                                                <div style={{fontSize:13,fontWeight:800,color:'var(--text)',lineHeight:1.3}}>{item.location||item.content}</div>
+                                            </div>
+                                        </div>
+                                        {idx<items.length-1&&(
+                                            <div className="route-leg">
+                                                {metrics[d]?.[idx] ? (
+                                                    <div className="route-leg-pill"><Icon name="car" size={11}/>約 {Math.round(metrics[d][idx].duration/60)} 分 · {(metrics[d][idx].distance/1000).toFixed(1)} km</div>
+                                                ) : <div style={{width:2,height:14,background:'var(--border)',borderRadius:99,marginLeft:12}}/>}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })}
+                </div>
+            </>)}
+        </div>
+    );
+};
 
-                    {isModalOpen && (
-                        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
-                            <div className="bg-white rounded-[32px] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in duration-300 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                                <div className="bg-slate-900 p-5 text-white flex justify-between items-center flex-shrink-0"><h2 className="text-base font-black">{editingItem ? '編輯行程' : '新增行程'}</h2><button onClick={() => setIsModalOpen(false)}><Icon name="x" className="w-5 h-5"/></button></div>
-                                <form onSubmit={handleSaveForm} className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1 pb-10">
-                                    <div className="flex gap-3">
-                                        <div className="flex-1"><label className="text-xs font-black text-slate-400 mb-1 block uppercase">Day</label><select value={formData.day} onChange={e => setFormData({...formData, day: e.target.value})} className="w-full border-2 border-slate-100 rounded-xl p-2.5 font-bold outline-none focus:border-blue-500 bg-white">{[1,2,3,4,5,6].map(d=><option key={d} value={d}>Day {d}</option>)}</select></div>
-                                        <div className="flex-1"><label className="text-xs font-black text-slate-400 mb-1 block uppercase">Time</label>
-                                            <div className="flex items-center gap-1.5">
-                                                <select value={(formData.time||'09:00').split(':')[0]} onChange={e => setFormData({...formData, time: `${e.target.value}:${(formData.time||'09:00').split(':')[1]}`})} className="flex-1 border-2 border-slate-100 rounded-xl py-2.5 px-2 font-bold outline-none focus:border-blue-500 bg-white text-center">{Array.from({length:24},(_,i)=>i.toString().padStart(2,'0')).map(h=><option key={h} value={h}>{h}</option>)}</select><span>:</span>
-                                                <select value={(formData.time||'09:00').split(':')[1]} onChange={e => setFormData({...formData, time: `${(formData.time||'09:00').split(':')[0]}:${e.target.value}`})} className="flex-1 border-2 border-slate-100 rounded-xl py-2.5 px-2 font-bold outline-none focus:border-blue-500 bg-white text-center">{Array.from({length:60},(_,i)=>i.toString().padStart(2,'0')).map(m=><option key={m} value={m}>{m}</option>)}</select>
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPENSE TAB
+// ─────────────────────────────────────────────────────────────────────────────
+const EXPENSE_CATS = [
+    {key:'food',    label:'餐飲', icon:'utensils',    color:'#ef4444', bg:'#fef2f2'},
+    {key:'ticket',  label:'門票', icon:'ticket',      color:'#3b82f6', bg:'#eff6ff'},
+    {key:'transport',label:'交通',icon:'car',          color:'#10b981', bg:'#f0fdf4'},
+    {key:'shopping',label:'購物', icon:'shopping-bag',color:'#a855f7', bg:'#faf5ff'},
+    {key:'lodging', label:'住宿', icon:'bed',          color:'#f97316', bg:'#fff7ed'},
+    {key:'other',   label:'其他', icon:'circle-dot',   color:'#64748b', bg:'#f8fafc'},
+];
+
+const EXPENSE_DEFAULT = {description:'', amount:'', paidBy:MEMBERS[0], forWhom:[...MEMBERS], category:'food', day:1, note:''};
+
+const ExpenseTab = ({expenses, saveExpense, deleteExpense, showToast}) => {
+    const [showForm,   setShowForm]   = useState(false);
+    const [editingEx,  setEditingEx]  = useState(null);
+    const [form,       setForm]       = useState(EXPENSE_DEFAULT);
+    const [activeTab,  setActiveTab]  = useState('list'); // 'list' | 'settle'
+
+    const totalAmount = useMemo(()=>expenses.reduce((s,e)=>s+Number(e.amount),0),[expenses]);
+    const settlements = useMemo(()=>settle(expenses, MEMBERS),[expenses]);
+
+    const perMemberPaid = useMemo(()=>{
+        const m={};MEMBERS.forEach(mb=>m[mb]=0);
+        expenses.forEach(e=>{ m[e.paidBy]=(m[e.paidBy]||0)+Number(e.amount); });
+        return m;
+    },[expenses]);
+
+    const perMemberShare = useMemo(()=>{
+        const m={};MEMBERS.forEach(mb=>m[mb]=0);
+        expenses.forEach(e=>{ const pp=Number(e.amount)/e.forWhom.length; e.forWhom.forEach(mb=>{ m[mb]=(m[mb]||0)+pp; }); });
+        return m;
+    },[expenses]);
+
+    const openNew = () => { setForm({...EXPENSE_DEFAULT}); setEditingEx(null); setShowForm(true); };
+    const openEdit = ex => { setForm({...ex}); setEditingEx(ex); setShowForm(true); };
+
+    const handleSubmit = async e => {
+        e.preventDefault();
+        if (!form.description || !form.amount || form.forWhom.length===0) return showToast('⚠️ 請填寫完整資料');
+        const record = {...form, amount:+form.amount, day:+form.day};
+        if (editingEx) record.id = editingEx.id;
+        await saveExpense(record, !!editingEx);
+        setShowForm(false);
+        showToast(editingEx?'費用已更新':'費用已記錄');
+    };
+
+    const toggleForWhom = m => {
+        setForm(p=>({...p, forWhom: p.forWhom.includes(m) ? p.forWhom.filter(x=>x!==m) : [...p.forWhom,m]}));
+    };
+
+    const cat = k => EXPENSE_CATS.find(c=>c.key===k) || EXPENSE_CATS[0];
+
+    return (
+        <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',background:'var(--surface2)'}}>
+            {/* Sub-tabs */}
+            <div style={{background:'white',borderBottom:'1px solid var(--border)',padding:'0 14px',display:'flex',alignItems:'center',gap:0}}>
+                {[['list','明細'],['settle','結算']].map(([k,l])=>(
+                    <button key={k} onClick={()=>setActiveTab(k)}
+                        style={{padding:'12px 16px',border:'none',background:'transparent',cursor:'pointer',fontWeight:800,fontSize:13,color:activeTab===k?'var(--accent)':'var(--text-muted)',borderBottom:`2px solid ${activeTab===k?'var(--accent)':'transparent'}`,transition:'all .15s'}}>
+                        {l}
+                    </button>
+                ))}
+                <div style={{flex:1}}/>
+                <button className="btn-primary" onClick={openNew} style={{padding:'6px 14px',fontSize:13,marginLeft:8}}>
+                    <Icon name="plus" size={14} color="white"/>記帳
+                </button>
+            </div>
+
+            {activeTab==='list' ? (
+                <div className="scroll" style={{flex:1,overflowY:'auto',padding:'12px 12px 80px',display:'flex',flexDirection:'column',gap:8}}>
+                    {/* Summary bar */}
+                    <div style={{background:'white',borderRadius:14,border:'1.5px solid var(--border)',padding:'14px 16px',display:'flex',gap:12,alignItems:'center',marginBottom:4}}>
+                        <div>
+                            <div style={{fontSize:11,fontWeight:800,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em'}}>總支出</div>
+                            <div style={{fontSize:22,fontWeight:900,color:'var(--text)',marginTop:2}}>{fmt(totalAmount)}</div>
+                        </div>
+                        <div style={{flex:1}}/>
+                        <div style={{textAlign:'right'}}>
+                            <div style={{fontSize:11,fontWeight:800,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em'}}>每人均攤</div>
+                            <div style={{fontSize:16,fontWeight:900,color:'#0369a1',marginTop:2}}>{fmt(totalAmount/MEMBERS.length)}</div>
+                        </div>
+                    </div>
+
+                    {expenses.length===0 ? (
+                        <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-faint)'}}>
+                            <span style={{fontSize:40}}>💰</span>
+                            <div style={{marginTop:12,fontSize:14,fontWeight:700}}>還沒有費用記錄</div>
+                            <div style={{fontSize:12,marginTop:4}}>點右上角「記帳」開始記錄</div>
+                        </div>
+                    ) : expenses.map(ex=>{
+                        const c = cat(ex.category);
+                        return (
+                            <div key={ex.id} className="expense-card fade-in">
+                                <div style={{display:'flex',alignItems:'flex-start',gap:10}}>
+                                    <div style={{width:38,height:38,borderRadius:10,background:c.bg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                                        <Icon name={c.icon} size={18} color={c.color}/>
+                                    </div>
+                                    <div style={{flex:1,minWidth:0}}>
+                                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                                            <div style={{fontSize:14,fontWeight:800,color:'var(--text)',lineHeight:1.3}}>{ex.description}</div>
+                                            <div style={{fontSize:16,fontWeight:900,color:'var(--text)',flexShrink:0}}>{fmt(ex.amount)}</div>
+                                        </div>
+                                        <div style={{display:'flex',gap:6,marginTop:5,flexWrap:'wrap'}}>
+                                            <span className="badge" style={{background:c.bg,color:c.color}}>{c.label}</span>
+                                            <span style={{fontSize:11,fontWeight:700,color:'var(--text-muted)',display:'flex',alignItems:'center',gap:3}}>
+                                                <Icon name="user" size={11}/>由 <strong>{ex.paidBy}</strong> 代墊
+                                            </span>
+                                            <span style={{fontSize:11,fontWeight:700,color:'var(--text-faint)'}}>Day {ex.day}</span>
+                                        </div>
+                                        <div style={{marginTop:6,display:'flex',flexWrap:'wrap',gap:4}}>
+                                            {ex.forWhom.map(m=>(
+                                                <span key={m} style={{fontSize:10,fontWeight:800,padding:'2px 7px',borderRadius:6,background:'var(--bg)',color:'var(--text-muted)',border:'1px solid var(--border)'}}>{m}</span>
+                                            ))}
+                                        </div>
+                                        {ex.note&&<div style={{marginTop:6,fontSize:11,color:'var(--text-faint)',lineHeight:1.4}}>{ex.note}</div>}
+                                    </div>
+                                </div>
+                                <div style={{display:'flex',justifyContent:'flex-end',gap:6,marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)'}}>
+                                    <button className="btn-ghost" style={{padding:'4px 10px',fontSize:11}} onClick={()=>openEdit(ex)}>
+                                        <Icon name="pencil" size={11}/>編輯
+                                    </button>
+                                    <button className="btn-ghost" style={{padding:'4px 10px',fontSize:11,color:'#ef4444',borderColor:'#fecaca'}} onClick={()=>{if(confirm('確定刪除此筆費用？'))deleteExpense(ex.id);}}>
+                                        <Icon name="trash-2" size={11} color="#ef4444"/>刪除
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                /* SETTLEMENT TAB */
+                <div className="scroll" style={{flex:1,overflowY:'auto',padding:'12px 12px 80px'}}>
+                    {expenses.length===0 ? (
+                        <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-faint)'}}>
+                            <span style={{fontSize:40}}>🧮</span>
+                            <div style={{marginTop:12,fontSize:14,fontWeight:700}}>還沒有費用可結算</div>
+                        </div>
+                    ) : (<>
+                        {/* Per member summary */}
+                        <div style={{background:'white',borderRadius:14,border:'1.5px solid var(--border)',padding:'14px 16px',marginBottom:12}}>
+                            <div style={{fontSize:12,fontWeight:900,color:'var(--text)',marginBottom:12,display:'flex',alignItems:'center',gap:6}}>
+                                <Icon name="bar-chart-2" size={15} color="var(--accent)"/>各成員費用概覽
+                            </div>
+                            {MEMBERS.map(m=>{
+                                const paid  = perMemberPaid[m]  || 0;
+                                const share = perMemberShare[m] || 0;
+                                const diff  = paid - share;
+                                return (
+                                    <div key={m} style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+                                        <div style={{width:32,height:32,borderRadius:10,background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:800,color:'var(--text)',flexShrink:0}}>{m}</div>
+                                        <div style={{flex:1,minWidth:0}}>
+                                            <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                                                <span style={{fontSize:11,fontWeight:700,color:'var(--text-muted)'}}>代墊 {fmt(paid)} · 應付 {fmt(share)}</span>
+                                                <span style={{fontSize:12,fontWeight:900,color:diff>=0?'#059669':'#dc2626'}}>{diff>=0?'+':''}{fmt(diff)}</span>
+                                            </div>
+                                            <div style={{height:5,borderRadius:99,background:'var(--bg)',overflow:'hidden'}}>
+                                                <div style={{height:'100%',borderRadius:99,background:diff>=0?'#10b981':'#ef4444',width:`${Math.min(100,Math.abs(diff)/Math.max(totalAmount/MEMBERS.length,1)*100)}%`,transition:'width .4s ease'}}/>
                                             </div>
                                         </div>
                                     </div>
-                                    <div><label className="text-xs font-black text-slate-400 mb-1.5 block uppercase">負責人</label><div className="grid grid-cols-3 gap-2">{MEMBERS.map(m => <button type="button" key={m} onClick={()=>setFormData({...formData, member:m})} className={`py-2 rounded-xl text-sm font-black border-2 ${formData.member===m?'bg-blue-600 border-blue-600 text-white':'bg-white text-slate-500'}`}>{m}</button>)}</div></div>
-                                    <div>
-                                        <label className="text-xs font-black text-slate-400 mb-1.5 block uppercase">類別與子類別</label>
-                                        <div className="flex gap-2 mb-2">
-                                            <button type="button" onClick={()=>setFormData({...formData, type:'main'})} className={`flex-1 py-2.5 rounded-xl text-sm font-black border-2 ${formData.type==='main'?'bg-slate-800 border-slate-800 text-white':'bg-white text-slate-500'}`}>主要行程</button>
-                                            <button type="button" onClick={()=>setFormData({...formData, type:'backup'})} className={`flex-1 py-2.5 rounded-xl text-sm font-black border-2 ${formData.type==='backup'?'bg-amber-500 border-amber-500 text-white':'bg-white text-slate-500'}`}>備選景點</button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Transactions */}
+                        <div style={{fontSize:12,fontWeight:900,color:'var(--text)',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>
+                            <Icon name="arrow-right-left" size={15} color="var(--accent)"/>最少轉帳次數結算
+                        </div>
+                        {settlements.length===0 ? (
+                            <div style={{textAlign:'center',padding:'24px',background:'#f0fdf4',borderRadius:14,border:'1.5px solid #bbf7d0'}}>
+                                <div style={{fontSize:24}}>✅</div>
+                                <div style={{marginTop:8,fontSize:14,fontWeight:800,color:'#065f46'}}>帳目已平！不需要任何轉帳</div>
+                            </div>
+                        ) : settlements.map((txn,i)=>(
+                            <div key={i} className="settlement-row">
+                                <div style={{width:34,height:34,borderRadius:10,background:'#fef2f2',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:800,color:'#b91c1c',flexShrink:0}}>{txn.from}</div>
+                                <div style={{flex:1,display:'flex',alignItems:'center',gap:8}}>
+                                    <Icon name="arrow-right" size={16} color="var(--text-muted)"/>
+                                    <div style={{flex:1}}>
+                                        <div style={{fontSize:13,fontWeight:800,color:'var(--text)'}}>
+                                            <span style={{color:'#b91c1c'}}>{txn.from}</span> → <span style={{color:'#065f46'}}>{txn.to}</span>
                                         </div>
-                                        <div className="grid grid-cols-4 gap-2">{Object.entries(SUB_TYPES).map(([k,i])=><button type="button" key={k} onClick={()=>setFormData({...formData, subType:k})} className={`py-2 rounded-xl text-[11px] font-black border-2 flex flex-col items-center gap-1 ${formData.subType===k?`${i.badgeBg} ${i.border} ${i.badgeText}`:'bg-white text-slate-400'}`}><Icon name={i.icon} className="w-4 h-4"/>{i.label}</button>)}</div>
+                                        <div style={{fontSize:11,color:'var(--text-muted)',fontWeight:700,marginTop:2}}>每人均攤後的轉帳</div>
                                     </div>
-                                    <div><label className="text-xs font-black text-slate-400 mb-1 block uppercase">地點名稱</label><input type="text" value={formData.location} onChange={e=>setFormData({...formData, location:e.target.value})} className="w-full border-2 border-slate-100 rounded-xl p-2.5 font-bold outline-none focus:border-blue-500 text-base" /></div>
-                                    <div className="bg-purple-50/50 p-4 rounded-2xl border-2 border-purple-100/50"><label className="text-[11px] font-black text-purple-700 mb-1 block uppercase">行程內容</label><div className="flex gap-2"><input type="text" required value={formData.content} onChange={e=>setFormData({...formData, content:e.target.value})} className="flex-1 w-full border-2 border-slate-100 rounded-xl p-2.5 font-bold outline-none focus:border-blue-500 text-base" /><button type="button" onClick={handleGenerateContent} disabled={!formData.location||isGenerating} className="bg-purple-100 text-purple-700 font-bold px-3 rounded-xl border-2 hover:bg-purple-200 flex items-center justify-center gap-1">{isGenerating ? <Icon name="loader-2" className="w-4 h-4 icon-spin"/> : "✨ AI 幫寫"}</button></div></div>
-                                    <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100"><label className="text-xs font-black text-blue-600 mb-2 block uppercase">Google Map 連結</label><input type="url" placeholder="貼上完整網址自動填座標..." value={formData.url} onChange={e=>{setFormData({...formData, url:e.target.value});setUrlWarning("");}} onBlur={handleUrlBlur} className="w-full border-2 border-slate-200 rounded-xl p-2.5 bg-white mb-2 text-sm outline-none focus:border-blue-300" />{urlWarning && <div className="text-red-500 text-[11px] font-bold mb-2">{urlWarning}</div>}<div className="grid grid-cols-2 gap-3"><input type="number" step="any" value={formData.lat} onChange={e=>setFormData({...formData, lat:e.target.value})} className="w-full border-2 border-slate-200 rounded-lg p-2 text-sm font-mono" placeholder="Lat"/><input type="number" step="any" value={formData.lng} onChange={e=>setFormData({...formData, lng:e.target.value})} className="w-full border-2 border-slate-200 rounded-lg p-2 text-sm font-mono" placeholder="Lng"/></div></div>
-                                    <button type="submit" className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2 mt-4 text-lg"><Icon name="save" /> 儲存行程</button>
-                                </form>
+                                </div>
+                                <div style={{fontSize:16,fontWeight:900,color:'#1e293b',flexShrink:0}}>{fmt(txn.amount)}</div>
+                            </div>
+                        ))}
+                    </>)}
+                </div>
+            )}
+
+            {/* Add/Edit expense modal */}
+            {showForm && (
+                <div className="modal-bg" onClick={()=>setShowForm(false)} style={{position:'fixed',inset:0,zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center',padding:16,background:'rgba(15,23,42,.72)',backdropFilter:'blur(6px)'}}>
+                    <div className="modal-panel" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:22,width:'100%',maxWidth:440,maxHeight:'90vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 32px 64px rgba(0,0,0,.2)'}}>
+                        <div style={{padding:'15px 20px',background:'var(--text)',color:'white',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
+                            <div style={{fontWeight:900,fontSize:16}}>{editingEx?'✏️ 編輯費用':'💰 新增費用'}</div>
+                            <button onClick={()=>setShowForm(false)} style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,width:28,height:28,cursor:'pointer',color:'white',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                                <Icon name="x" size={14} color="white"/>
+                            </button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="scroll" style={{flex:1,overflowY:'auto',padding:'18px 18px 80px',display:'flex',flexDirection:'column',gap:15}}>
+
+                            {/* Category */}
+                            <div>
+                                <label className="form-label">類別</label>
+                                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:7}}>
+                                    {EXPENSE_CATS.map(c=>(
+                                        <button type="button" key={c.key} onClick={()=>setForm(p=>({...p,category:c.key}))}
+                                            style={{padding:'8px 4px',borderRadius:10,border:`1.5px solid ${form.category===c.key?c.color:'var(--border)'}`,background:form.category===c.key?c.bg:'white',cursor:'pointer',transition:'all .12s',display:'flex',flexDirection:'column',alignItems:'center',gap:3,fontSize:11,fontWeight:800,color:form.category===c.key?c.color:'var(--text-muted)'}}>
+                                            <Icon name={c.icon} size={17} color={form.category===c.key?c.color:undefined}/>
+                                            {c.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                                <label className="form-label">項目名稱 *</label>
+                                <input className="form-input" required value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="例：美麗海水族館門票"/>
+                            </div>
+
+                            {/* Amount + Day */}
+                            <div style={{display:'flex',gap:10}}>
+                                <div style={{flex:2}}>
+                                    <label className="form-label">金額 (NT$) *</label>
+                                    <input className="form-input" required type="number" min="0" step="1" value={form.amount} onChange={e=>setForm(p=>({...p,amount:e.target.value}))} placeholder="0"/>
+                                </div>
+                                <div style={{flex:1}}>
+                                    <label className="form-label">Day</label>
+                                    <select className="form-input" value={form.day} onChange={e=>setForm(p=>({...p,day:+e.target.value}))}>
+                                        {[1,2,3,4,5,6].map(d=><option key={d} value={d}>D{d}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Paid by */}
+                            <div>
+                                <label className="form-label">由誰代墊 *</label>
+                                <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                                    {MEMBERS.map(m=>(
+                                        <button type="button" key={m} className={`member-pill ${form.paidBy===m?'selected':''}`} onClick={()=>setForm(p=>({...p,paidBy:m}))}>{m}</button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* For whom */}
+                            <div>
+                                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                                    <label className="form-label" style={{marginBottom:0}}>替誰付款 * <span style={{fontWeight:400,color:'var(--text-faint)',textTransform:'none',fontSize:10}}>({form.forWhom.length}人 · 每人 {form.amount?fmt(+form.amount/Math.max(form.forWhom.length,1)):'-'})</span></label>
+                                    <div style={{display:'flex',gap:6}}>
+                                        <button type="button" style={{fontSize:10,fontWeight:700,color:'var(--accent)',border:'none',background:'transparent',cursor:'pointer'}} onClick={()=>setForm(p=>({...p,forWhom:[...MEMBERS]}))}>全選</button>
+                                        <button type="button" style={{fontSize:10,fontWeight:700,color:'var(--text-faint)',border:'none',background:'transparent',cursor:'pointer'}} onClick={()=>setForm(p=>({...p,forWhom:[]}))}>清除</button>
+                                    </div>
+                                </div>
+                                <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                                    {MEMBERS.map(m=>(
+                                        <button type="button" key={m}
+                                            className={`member-pill ${form.forWhom.includes(m)?'selected':''}`}
+                                            style={form.forWhom.includes(m)?{background:'#0284c7',borderColor:'#0284c7'}:{}}
+                                            onClick={()=>toggleForWhom(m)}>{m}</button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Note */}
+                            <div>
+                                <label className="form-label">備註</label>
+                                <input className="form-input" value={form.note} onChange={e=>setForm(p=>({...p,note:e.target.value}))} placeholder="選填：補充說明"/>
+                            </div>
+
+                            <button type="submit" className="btn-primary" style={{width:'100%',justifyContent:'center',padding:'13px 0',fontSize:15,borderRadius:13}}>
+                                <Icon name="save" size={16} color="white"/> 儲存費用
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ITEM MODAL (add/edit itinerary)
+// ─────────────────────────────────────────────────────────────────────────────
+const FORM_DEFAULT = {day:1,time:'09:00',content:'',location:'',url:'',lat:26.2124,lng:127.6809,member:MEMBERS[0],type:'main',subType:'attraction'};
+
+const ItemModal = ({open, editing, onClose, onSave, activeDay}) => {
+    const [form,    setForm]    = useState(FORM_DEFAULT);
+    const [urlWarn, setUrlWarn] = useState('');
+
+    useEffect(()=>{
+        if(!open) return;
+        setForm(editing?{...editing}:{...FORM_DEFAULT,day:activeDay});
+        setUrlWarn('');
+    },[open,editing,activeDay]);
+
+    if (!open) return null;
+    const set=(k,v)=>setForm(p=>({...p,[k]:v}));
+
+    const handleUrlBlur = e => {
+        const url = e.target.value;
+        if (!url) { setUrlWarn(''); return; }
+        const mAt=url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/), m3d=url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+        if (mAt)      { setForm(p=>({...p,lat:+mAt[1],lng:+mAt[2]})); setUrlWarn(''); }
+        else if (m3d) { setForm(p=>({...p,lat:+m3d[1],lng:+m3d[2]})); setUrlWarn(''); }
+        else if (url.includes('goo.gl')||url.includes('maps.app')) setUrlWarn('短網址無法自動解析，請貼完整網址或手動填座標。');
+        else setUrlWarn('無法從此網址取得座標，請手動填寫。');
+    };
+
+    const handleSubmit = e => {
+        e.preventDefault();
+        const data={...form,day:+form.day,lat:+form.lat||26.2124,lng:+form.lng||127.6809};
+        if(!editing) delete data.id;
+        onSave(data,!!editing);
+        onClose();
+    };
+
+    return (
+        <div className="modal-bg" onClick={onClose} style={{position:'fixed',inset:0,zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center',padding:16,background:'rgba(15,23,42,.72)',backdropFilter:'blur(6px)'}}>
+            <div className="modal-panel" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:22,width:'100%',maxWidth:440,maxHeight:'90vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 32px 64px rgba(0,0,0,.2)'}}>
+                <div style={{padding:'15px 20px',background:'var(--text)',color:'white',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
+                    <div style={{fontWeight:900,fontSize:16}}>{editing?'✏️ 編輯行程':'＋ 新增行程'}</div>
+                    <button onClick={onClose} style={{background:'rgba(255,255,255,.15)',border:'none',borderRadius:8,width:28,height:28,cursor:'pointer',color:'white',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <Icon name="x" size={14} color="white"/>
+                    </button>
+                </div>
+                <form onSubmit={handleSubmit} className="scroll" style={{flex:1,overflowY:'auto',padding:'18px 18px 80px',display:'flex',flexDirection:'column',gap:16}}>
+                    <div style={{display:'flex',gap:12}}>
+                        <div style={{flex:1}}>
+                            <label className="form-label">Day</label>
+                            <select value={form.day} onChange={e=>set('day',e.target.value)} className="form-input">
+                                {[1,2,3,4,5,6].map(d=><option key={d} value={d}>Day {d}</option>)}
+                            </select>
+                        </div>
+                        <div style={{flex:1}}>
+                            <label className="form-label">時間</label>
+                            <div style={{display:'flex',alignItems:'center',gap:5}}>
+                                <select value={form.time.split(':')[0]} onChange={e=>set('time',`${e.target.value}:${form.time.split(':')[1]}`)} className="form-input" style={{flex:1,textAlign:'center',padding:'10px 2px'}}>
+                                    {Array.from({length:24},(_,i)=>i.toString().padStart(2,'0')).map(h=><option key={h} value={h}>{h}</option>)}
+                                </select>
+                                <span style={{fontWeight:900,color:'var(--text-muted)',flexShrink:0}}>:</span>
+                                <select value={form.time.split(':')[1]} onChange={e=>set('time',`${form.time.split(':')[0]}:${e.target.value}`)} className="form-input" style={{flex:1,textAlign:'center',padding:'10px 2px'}}>
+                                    {['00','05','10','15','20','25','30','35','40','45','50','55'].map(m=><option key={m} value={m}>{m}</option>)}
+                                </select>
                             </div>
                         </div>
-                    )}
-                </div>
-            );
-        };
+                    </div>
+                    <div>
+                        <label className="form-label">性質</label>
+                        <div style={{display:'flex',gap:8}}>
+                            {[['main','主要行程'],['backup','備選景點']].map(([v,l])=>(
+                                <button type="button" key={v} onClick={()=>set('type',v)} style={{flex:1,padding:'8px 0',borderRadius:9,border:`1.5px solid ${form.type===v?'var(--text)':'var(--border)'}`,background:form.type===v?'var(--text)':'white',color:form.type===v?'white':'var(--text-muted)',fontWeight:800,fontSize:13,cursor:'pointer',transition:'all .15s'}}>{l}</button>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="form-label">類別</label>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:7}}>
+                            {Object.entries(SUB_TYPES).map(([k,s])=>(
+                                <button type="button" key={k} className="subtype-btn" onClick={()=>set('subType',k)}
+                                    style={{color:form.subType===k?s.text:'var(--text-muted)',background:form.subType===k?s.bg:'white',borderColor:form.subType===k?s.color:'var(--border)'}}>
+                                    <Icon name={s.icon} size={17} color={form.subType===k?s.text:undefined}/>{s.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="form-label">負責人</label>
+                        <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                            {MEMBERS.map(m=><button type="button" key={m} className={`member-pill ${form.member===m?'selected':''}`} onClick={()=>set('member',m)}>{m}</button>)}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="form-label">地點名稱</label>
+                        <input className="form-input" value={form.location} onChange={e=>set('location',e.target.value)} placeholder="例：美麗海水族館"/>
+                    </div>
+                    <div>
+                        <label className="form-label">行程描述 <span style={{color:'var(--accent)'}}>*</span></label>
+                        <input className="form-input" required value={form.content} onChange={e=>set('content',e.target.value)} placeholder="簡短描述這個行程"/>
+                    </div>
+                    <div style={{background:'var(--bg)',borderRadius:13,padding:'13px 15px',border:'1px solid var(--border)'}}>
+                        <label className="form-label" style={{color:'var(--accent)'}}>Google Maps 連結</label>
+                        <input className="form-input" type="url" value={form.url} onChange={e=>{set('url',e.target.value);setUrlWarn('');}} onBlur={handleUrlBlur} placeholder="貼完整網址可自動取得座標…" style={{marginBottom:urlWarn?8:10,background:'white'}}/>
+                        {urlWarn&&<div style={{fontSize:12,color:'#ef4444',fontWeight:700,marginBottom:8,display:'flex',alignItems:'center',gap:5}}><Icon name="alert-triangle" size={13} color="#ef4444"/>{urlWarn}</div>}
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                            <input className="form-input" type="number" step="any" value={form.lat} onChange={e=>set('lat',e.target.value)} placeholder="緯度 Lat" style={{fontFamily:"'DM Mono',monospace",fontSize:13,background:'white'}}/>
+                            <input className="form-input" type="number" step="any" value={form.lng} onChange={e=>set('lng',e.target.value)} placeholder="經度 Lng" style={{fontFamily:"'DM Mono',monospace",fontSize:13,background:'white'}}/>
+                        </div>
+                    </div>
+                    <button type="submit" className="btn-primary" style={{width:'100%',justifyContent:'center',padding:'13px 0',fontSize:15,borderRadius:13}}>
+                        <Icon name="save" size={16} color="white"/>儲存行程
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+};
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+// ─────────────────────────────────────────────────────────────────────────────
+// APP
+// ─────────────────────────────────────────────────────────────────────────────
+const App = () => {
+    const {itinerary, expenses, isLocal, loading, saveItem, deleteItem, batchUpdate, saveExpense, deleteExpense} = useFirebase();
+    const [mainTab,   setMainTab]   = useState('map');    // 'map' | 'expense'
+    const [viewMode,  setViewMode]  = useState('itinerary');
+    const [activeDay, setActiveDay] = useState(1);
+    const [routeDays, setRouteDays] = useState([1,2,3,4,5,6]);
+    const [isMobile,  setIsMobile]  = useState(window.innerWidth < 768);
+    const [mapH,      setMapH]      = useState(42);
+    const [toast,     setToast]     = useState({msg:'',show:false});
+    const [focus,     setFocus]     = useState(null);
+    const [metrics,   setMetrics]   = useState({});
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editing,   setEditing]   = useState(null);
+
+    useEffect(()=>{
+        const fn=()=>setIsMobile(window.innerWidth<768);
+        window.addEventListener('resize',fn);
+        return ()=>window.removeEventListener('resize',fn);
+    },[]);
+
+    const showToast = useCallback(msg=>{
+        setToast({msg,show:true});
+        const t=setTimeout(()=>setToast({msg:'',show:false}),3000);
+        return ()=>clearTimeout(t);
+    },[]);
+
+    const handleDragDrop = useCallback(async(dragId,targetId)=>{
+        if(dragId===targetId) return;
+        const a=itinerary.find(i=>i.id===dragId), b=itinerary.find(i=>i.id===targetId);
+        if(!a||!b) return;
+        await batchUpdate([{id:dragId,time:b.time},{id:targetId,time:a.time}]);
+    },[itinerary,batchUpdate]);
+
+    const handleShift = useCallback(async(startId)=>{
+        const dayItems=itinerary.filter(i=>i.day===activeDay).sort((a,b)=>a.time.localeCompare(b.time));
+        const startIdx=dayItems.findIndex(i=>i.id===startId);
+        if(startIdx===-1) return;
+        const updates=dayItems.slice(startIdx).map(item=>{
+            const [h,m]=item.time.split(':').map(Number);
+            const d=new Date(2000,0,1,h,m+30);
+            return {id:item.id,time:`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`};
+        });
+        await batchUpdate(updates);
+        showToast('已順延此行程及後續 30 分鐘');
+    },[itinerary,activeDay,batchUpdate,showToast]);
+
+    const handleSave = useCallback(async(data,isEdit)=>{
+        await saveItem(data,isEdit);
+        showToast(isEdit?'行程已更新':'已新增行程');
+    },[saveItem,showToast]);
+
+    const handleResizeStart = useCallback(e=>{
+        e.preventDefault();
+        const startY=e.touches?.[0]?.clientY??e.clientY, startH=mapH, vh=window.innerHeight/100;
+        const move=me=>setMapH(Math.max(18,Math.min(72,startH+((me.touches?.[0]?.clientY??me.clientY)-startY)/vh)));
+        const up=()=>{window.removeEventListener('mousemove',move);window.removeEventListener('mouseup',up);window.removeEventListener('touchmove',move);window.removeEventListener('touchend',up);};
+        window.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
+        window.addEventListener('touchmove',move,{passive:false});window.addEventListener('touchend',up);
+    },[mapH]);
+
+    if (loading) return (
+        <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16,background:'var(--bg)'}}>
+            <div style={{width:44,height:44,border:'4px solid var(--border)',borderTopColor:'var(--accent)',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>
+            <div style={{fontSize:14,fontWeight:700,color:'var(--text-muted)'}}>載入行程資料…</div>
+        </div>
+    );
+
+    const totalExpense = expenses.reduce((s,e)=>s+Number(e.amount),0);
+
+    return (
+        <div style={{height:'100%',display:'flex',flexDirection:'column'}}>
+            <Toast msg={toast.msg} show={toast.show}/>
+
+            {/* ── HEADER ── */}
+            <header style={{background:'var(--text)',color:'white',padding:'0 16px',height:'var(--header-h)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexShrink:0,zIndex:20}}>
+                <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <div className="header-logo" style={{background:'#3b82f6',width:32,height:32,borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                        <Icon name="map" size={16} color="white"/>
+                    </div>
+                    <div>
+                        <div className="header-title" style={{fontWeight:900,fontSize:15,letterSpacing:'-.02em'}}>沖繩旅遊地圖</div>
+                        <div className="header-subtitle" style={{fontSize:10,fontWeight:700,color:isLocal?'#fbbf24':'#4ade80',letterSpacing:'.03em'}}>{isLocal?'● 離線模式':'● 雲端同步'}</div>
+                    </div>
+                </div>
+
+                {/* Desktop tab switch */}
+                {!isMobile && (
+                    <div style={{display:'flex',gap:2,background:'rgba(255,255,255,.12)',borderRadius:11,padding:3}}>
+                        {[['map','地圖行程','map'],['expense','費用結算','wallet']].map(([k,l,icon])=>(
+                            <button key={k} className={`view-btn ${mainTab===k?'active':''}`} onClick={()=>setMainTab(k)}>
+                                <Icon name={icon} size={13}/>{l}
+                                {k==='expense'&&totalExpense>0&&<span style={{background:mainTab==='expense'?'var(--accent)':'rgba(255,255,255,.3)',color:'white',borderRadius:99,padding:'1px 6px',fontSize:10,fontWeight:900}}>{fmt(totalExpense)}</span>}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                <div style={{display:'flex',gap:8,alignItems:'center',minWidth:120,justifyContent:'flex-end'}}>
+                    {!isMobile && (
+                        <div className="view-toggle" style={{visibility: mainTab==='map' ? 'visible' : 'hidden'}}>
+                            <button className={`view-btn ${viewMode==='itinerary'?'active':''}`} onClick={()=>setViewMode('itinerary')}><Icon name="list" size={13}/>單日</button>
+                            <button className={`view-btn ${viewMode==='route'?'active':''}`} onClick={()=>setViewMode('route')}><Icon name="route" size={13}/>路線</button>
+                        </div>
+                    )}
+                    <div style={{visibility: mainTab==='map' ? 'visible' : 'hidden'}}>
+                        <button onClick={()=>{setEditing(null);setModalOpen(true);}} className="btn-primary" style={{padding:'7px 16px',fontSize:13}}>
+                            <Icon name="plus" size={15} color="white"/>新增
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            {/* ── BODY ── */}
+            {mainTab==='map' ? (
+                isMobile ? (
+                    <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minHeight:0}}>
+                        {/* Mobile map-view sub-header */}
+                        <div style={{background:'white',borderBottom:'1px solid var(--border)',padding:'8px 12px',display:'flex',gap:6,alignItems:'center'}}>
+                            <div className="view-toggle" style={{background:'var(--bg)'}}>
+                                <button className={`view-btn ${viewMode==='itinerary'?'active':''}`} onClick={()=>setViewMode('itinerary')} style={{color:viewMode==='itinerary'?'var(--text)':'var(--text-muted)'}}><Icon name="list" size={13}/>單日</button>
+                                <button className={`view-btn ${viewMode==='route'?'active':''}`} onClick={()=>setViewMode('route')} style={{color:viewMode==='route'?'var(--text)':'var(--text-muted)'}}><Icon name="route" size={13}/>路線</button>
+                            </div>
+                        </div>
+                        <MapArea itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={true} mapH={mapH}/>
+                        <div className="resize-handle" onMouseDown={handleResizeStart} onTouchStart={handleResizeStart}/>
+                        <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                            <ItinerarySidebar itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} setActiveDay={setActiveDay} routeDays={routeDays} toggleRouteDay={d=>setRouteDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d].sort())} onEdit={item=>{setEditing(item);setModalOpen(true);}} onDelete={deleteItem} onShift={handleShift} onDragDrop={handleDragDrop} onFocus={setFocus} metrics={metrics} showToast={showToast}/>
+                        </div>
+                    </div>
+                ) : (
+                    <div style={{flex:1,display:'flex',flexDirection:'row',overflow:'hidden',minHeight:0}}>
+                        <div style={{width:'var(--sidebar-w)',flexShrink:0,display:'flex',flexDirection:'column',borderRight:'1px solid var(--border)',overflow:'hidden'}}>
+                            <ItinerarySidebar itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} setActiveDay={setActiveDay} routeDays={routeDays} toggleRouteDay={d=>setRouteDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d].sort())} onEdit={item=>{setEditing(item);setModalOpen(true);}} onDelete={deleteItem} onShift={handleShift} onDragDrop={handleDragDrop} onFocus={setFocus} metrics={metrics} showToast={showToast}/>
+                        </div>
+                        <MapArea itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={false} mapH={mapH}/>
+                    </div>
+                )
+            ) : (
+                /* EXPENSE TAB (desktop) */
+                <div style={{flex:1,display:'flex',flexDirection:'row',overflow:'hidden',minHeight:0}}>
+                    <div style={{width:'var(--sidebar-w)',flexShrink:0,borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                        <ExpenseTab expenses={expenses} saveExpense={saveExpense} deleteExpense={deleteExpense} showToast={showToast}/>
+                    </div>
+                    {/* Keep map visible on desktop expense view */}
+                    <MapArea itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={false} mapH={mapH}/>
+                </div>
+            )}
+
+            {/* ── MOBILE BOTTOM NAV ── */}
+            <nav className="bottom-nav">
+                <button className={`nav-tab ${mainTab==='map'?'active':''}`} onClick={()=>setMainTab('map')}>
+                    <Icon name="map" size={20} color={mainTab==='map'?'var(--accent)':'var(--text-faint)'}/>地圖行程
+                </button>
+                <button className={`nav-tab ${mainTab==='expense'?'active':''}`} onClick={()=>setMainTab('expense')}>
+                    <Icon name="wallet" size={20} color={mainTab==='expense'?'var(--accent)':'var(--text-faint)'}/>
+                    費用結算
+                    {totalExpense>0&&<span style={{position:'absolute',top:6,right:18,background:'var(--accent)',color:'white',borderRadius:99,padding:'1px 5px',fontSize:9,fontWeight:900}}>{expenses.length}</span>}
+                </button>
+            </nav>
+
+            {/* Mobile expense full-screen */}
+            {isMobile && mainTab==='expense' && (
+                <div style={{position:'fixed',inset:0,top:'var(--header-h)',bottom:'calc(var(--nav-h) + var(--safe-bottom))',zIndex:150,display:'flex',flexDirection:'column',background:'var(--surface2)'}}>
+                    <ExpenseTab expenses={expenses} saveExpense={saveExpense} deleteExpense={deleteExpense} showToast={showToast}/>
+                </div>
+            )}
+
+            {/* Mobile FAB */}
+            {mainTab==='map'&&<button className="fab" onClick={()=>{setEditing(null);setModalOpen(true);}}><Icon name="plus" size={22} color="white"/></button>}
+
+            <ItemModal open={modalOpen} editing={editing} onClose={()=>{setModalOpen(false);setEditing(null);}} onSave={handleSave} activeDay={activeDay}/>
+        </div>
+    );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script>
+// PWA Service Worker
+if ('serviceWorker' in navigator) {
+    const swCode = `
+const CACHE = 'okinawa-v1';
+const PRECACHE = [
+    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+    'https://unpkg.com/react@18/umd/react.production.min.js',
+    'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+    'https://unpkg.com/@babel/standalone/babel.min.js',
+    'https://unpkg.com/lucide@latest',
+];
+self.addEventListener('install', e => {
+    e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE).catch(()=>{})));
+    self.skipWaiting();
+});
+self.addEventListener('activate', e => {
+    e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
+    self.clients.claim();
+});
+self.addEventListener('fetch', e => {
+    // Cache CDN assets; network-first for Firebase/API
+    const url = new URL(e.request.url);
+    const isCDN = url.hostname.includes('unpkg.com') || url.hostname.includes('googleapis.com') || url.hostname.includes('cdnjs');
+    if (isCDN) {
+        e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => {
+            const clone = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, clone));
+            return res;
+        }).catch(() => r)));
+    }
+});
+`;
+    const blob = new Blob([swCode], {type:'application/javascript'});
+    const swUrl = URL.createObjectURL(blob);
+    navigator.serviceWorker.register(swUrl).catch(()=>{});
+}
+
+// Install prompt for Android
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    // Show a subtle install hint after 3s if not already installed
+    setTimeout(() => {
+        if (deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
+            const banner = document.createElement('div');
+            banner.id = 'install-banner';
+            banner.style.cssText = 'position:fixed;bottom:calc(62px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#1e293b;color:white;padding:10px 18px;border-radius:99px;font-size:13px;font-weight:700;z-index:9998;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,.3);font-family:Noto Sans TC,sans-serif;white-space:nowrap;animation:fadeIn .3s ease;';
+            banner.innerHTML = '📲 加入主畫面離線使用 <button onclick="installApp()" style="background:white;color:#1e293b;border:none;border-radius:8px;padding:5px 12px;font-weight:800;font-size:12px;cursor:pointer;">安裝</button><button onclick="document.getElementById('install-banner').remove()" style="background:transparent;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-size:16px;padding:0 4px;">×</button>';
+            document.body.appendChild(banner);
+            setTimeout(() => banner?.remove(), 12000);
+        }
+    }, 3000);
+});
+window.installApp = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    document.getElementById('install-banner')?.remove();
+};
+</script>
 </body>
 </html>
