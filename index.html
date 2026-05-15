@@ -106,10 +106,7 @@
         .layer-btn{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;border:1.5px solid var(--border);background:white;font-weight:700;font-size:11px;cursor:pointer;transition:all .15s;color:var(--text-muted);white-space:nowrap;}
         .layer-btn.on{border-color:currentColor;}
         .layer-btn:hover{background:var(--bg);}
-        /* On mobile, layer controls go bottom-left above resize handle */
-        @media(max-width:767px){
-            .map-layer-controls{bottom:56px!important;top:auto!important;right:auto!important;left:10px!important;flex-direction:row!important;}
-        }
+        /* Layer controls position handled inline per device */
 
         /* Toast */
         .toast{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--text);color:white;padding:10px 20px;border-radius:99px;font-weight:700;font-size:13px;white-space:nowrap;display:flex;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);animation:fadeIn .3s cubic-bezier(.16,1,.3,1);}
@@ -134,9 +131,20 @@
         .route-leg{display:flex;align-items:center;padding:5px 0 5px 44px;}
         .route-leg-pill{background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;color:var(--text-muted);display:flex;align-items:center;gap:5px;}
 
-        /* Resize handle */
-        .resize-handle{width:100%;height:18px;display:flex;align-items:center;justify-content:center;cursor:row-resize;flex-shrink:0;background:var(--border);}
-        .resize-handle::before{content:'';width:32px;height:3px;background:#94a3b8;border-radius:99px;}
+        /* Resize handle — bigger touch target, snap pill */
+        .resize-handle{
+            width:100%; height:32px; display:flex; align-items:center; justify-content:center;
+            cursor:row-resize; flex-shrink:0; background:white;
+            border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+            touch-action:none; /* critical: stops browser scroll hijacking */
+            position:relative; z-index:10;
+        }
+        .resize-handle::before{content:'';width:40px;height:4px;background:#cbd5e1;border-radius:99px;}
+        .resize-handle:active::before{background:#94a3b8;}
+        /* Snap buttons inside handle */
+        .resize-snaps{position:absolute;right:12px;display:flex;gap:6px;}
+        .resize-snap-btn{border:none;background:var(--bg);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;color:var(--text-muted);cursor:pointer;line-height:1;}
+        .resize-snap-btn:active{background:var(--border);}
 
         /* Map popup */
         .popup-content{padding:14px;}
@@ -147,11 +155,11 @@
         .subtype-btn{padding:8px 4px;border-radius:10px;border:1.5px solid var(--border);background:white;cursor:pointer;transition:all .12s;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:800;color:var(--text-muted);}
 
         /* Bottom nav (mobile) */
-        .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + var(--safe-bottom));background:white;border-top:1px solid var(--border);z-index:300;align-items:flex-start;justify-content:space-around;padding:4px 4px 0;padding-bottom:calc(4px + var(--safe-bottom));}
+        .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + var(--safe-bottom));background:white;border-top:1px solid var(--border);z-index:9000;align-items:flex-start;justify-content:space-around;padding:4px 4px 0;padding-bottom:calc(4px + var(--safe-bottom));}
         @media(max-width:767px){.bottom-nav{display:flex;}}
 
         /* FAB */
-        .fab{position:fixed;right:max(18px, var(--safe-right));bottom:calc(var(--nav-h) + var(--safe-bottom) + 12px);width:52px;height:52px;border-radius:50%;background:var(--text);color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.22),0 0 0 3px rgba(255,255,255,.15);transition:all .15s;z-index:200;}
+        .fab{position:fixed;right:max(18px, var(--safe-right));bottom:calc(var(--nav-h) + var(--safe-bottom) + 12px);width:52px;height:52px;border-radius:50%;background:var(--text);color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.22),0 0 0 3px rgba(255,255,255,.15);transition:all .15s;z-index:8999;}
         .fab:active{transform:scale(.9);}
         @media(min-width:768px){.fab{display:none;}}
 
@@ -652,8 +660,15 @@ const MapArea = memo(({itinerary, viewMode, activeDay, routeDays, focusTarget, o
         <div style={{position:'relative', flex:isMobile?'none':'1', height:isMobile?`${mapH}vh`:'100%'}}>
             <div ref={mapEl} style={{position:'absolute', inset:0}} />
 
-            {/* Layer controls */}
-            <div className="map-layer-controls" style={{position:'absolute', top:12, right:12, zIndex:1000, display:'flex', flexDirection:'column', gap:7}}>
+            {/* Layer controls — top-right desktop, bottom-left mobile (above resize handle) */}
+            <div className="map-layer-controls" style={{
+                position:'absolute',
+                ...(isMobile
+                    ? {bottom:10, left:10, flexDirection:'row'}
+                    : {top:12, right:12, flexDirection:'column'}
+                ),
+                zIndex:1000, display:'flex', gap:7
+            }}>
                 <button className={`layer-btn ${layers.parking?'on':''}`}
                     onClick={toggleParking}
                     style={{color: layers.parking?'#1e293b':'var(--text-muted)', borderColor: layers.parking?'#1e293b':'var(--border)'}}>
@@ -822,7 +837,7 @@ const ItinerarySidebar = ({itinerary, viewMode, activeDay, setActiveDay, routeDa
     };
 
     return (
-        <div style={{width:'100%',display:'flex',flexDirection:'column',background:'var(--surface2)',overflow:'hidden',flexShrink:0}}>
+        <div style={{width:'100%',flex:1,minHeight:0,display:'flex',flexDirection:'column',background:'var(--surface2)',overflow:'hidden'}}>
             {viewMode==='itinerary' ? (<>
                 <div style={{padding:'10px 12px',borderBottom:'1px solid var(--border)',background:'white',display:'flex',gap:6,alignItems:'center',overflowX:'auto'}} className="scroll">
                     {[1,2,3,4,5,6].map(d=><button key={d} className={`day-tab ${activeDay===d?'active':'inactive'}`} onClick={()=>setActiveDay(d)}>D{d}</button>)}
@@ -830,7 +845,7 @@ const ItinerarySidebar = ({itinerary, viewMode, activeDay, setActiveDay, routeDa
                     <button className="btn-ghost" onClick={handleCopy} style={{flexShrink:0}}><Icon name="copy" size={12}/>複製</button>
                     <button className="btn-ghost" onClick={handleNav}  style={{flexShrink:0}}><Icon name="navigation" size={12} color="#0ea5e9"/>導航</button>
                 </div>
-                <div className="scroll" style={{flex:1,overflowY:'auto',padding:'10px 10px 80px',display:'flex',flexDirection:'column',gap:8}}>
+                <div className="scroll" style={{flex:1,minHeight:0,overflowY:'auto',padding:'10px 10px 24px',display:'flex',flexDirection:'column',gap:8,minHeight:0}}>
                     {dayItems.length===0 ? (
                         <div style={{textAlign:'center',padding:'50px 20px',color:'var(--text-faint)'}}>
                             <Icon name="calendar-plus" size={36} color="var(--text-faint)"/>
@@ -867,7 +882,7 @@ const ItinerarySidebar = ({itinerary, viewMode, activeDay, setActiveDay, routeDa
                         ))}
                     </div>
                 </div>
-                <div className="scroll" style={{flex:1,overflowY:'auto',padding:'12px 13px 80px',display:'flex',flexDirection:'column',gap:18}}>
+                <div className="scroll" style={{flex:1,minHeight:0,overflowY:'auto',padding:'12px 13px 24px',display:'flex',flexDirection:'column',gap:18}}>
                     {routeDays.map(d=>{
                         const items=itinerary.filter(i=>i.day===d).sort((a,b)=>a.time.localeCompare(b.time));
                         if(!items.length) return null;
@@ -974,7 +989,7 @@ const ExpenseTab = ({expenses, saveExpense, deleteExpense, showToast}) => {
             </div>
 
             {activeTab==='list' ? (
-                <div className="scroll" style={{flex:1,overflowY:'auto',padding:'12px 12px 80px',display:'flex',flexDirection:'column',gap:8}}>
+                <div className="scroll" style={{flex:1,minHeight:0,overflowY:'auto',padding:'12px 12px 24px',display:'flex',flexDirection:'column',gap:8}}>
                     {/* Summary bar */}
                     <div style={{background:'white',borderRadius:14,border:'1.5px solid var(--border)',padding:'14px 16px',display:'flex',gap:12,alignItems:'center',marginBottom:4}}>
                         <div>
@@ -1036,7 +1051,7 @@ const ExpenseTab = ({expenses, saveExpense, deleteExpense, showToast}) => {
                 </div>
             ) : (
                 /* SETTLEMENT TAB */
-                <div className="scroll" style={{flex:1,overflowY:'auto',padding:'12px 12px 80px'}}>
+                <div className="scroll" style={{flex:1,minHeight:0,overflowY:'auto',padding:'12px 12px 24px'}}>
                     {expenses.length===0 ? (
                         <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-faint)'}}>
                             <span style={{fontSize:40}}>🧮</span>
@@ -1311,7 +1326,7 @@ const ItemModal = ({open, editing, onClose, onSave, activeDay}) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const App = () => {
     const {itinerary, expenses, isLocal, loading, saveItem, deleteItem, batchUpdate, saveExpense, deleteExpense} = useFirebase();
-    const [mainTab,   setMainTab]   = useState('map');    // 'map' | 'expense'
+    const [mainTab,   setMainTab]   = useState('map');    // 'map' | 'itinerary' | 'expense'
     const [viewMode,  setViewMode]  = useState('itinerary');
     const [activeDay, setActiveDay] = useState(1);
     const [routeDays, setRouteDays] = useState([1,2,3,4,5,6]);
@@ -1361,13 +1376,31 @@ const App = () => {
     },[saveItem,showToast]);
 
     const handleResizeStart = useCallback(e=>{
-        e.preventDefault();
-        const startY=e.touches?.[0]?.clientY??e.clientY, startH=mapH, vh=window.innerHeight/100;
-        const move=me=>setMapH(Math.max(18,Math.min(72,startH+((me.touches?.[0]?.clientY??me.clientY)-startY)/vh)));
-        const up=()=>{window.removeEventListener('mousemove',move);window.removeEventListener('mouseup',up);window.removeEventListener('touchmove',move);window.removeEventListener('touchend',up);};
-        window.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
-        window.addEventListener('touchmove',move,{passive:false});window.addEventListener('touchend',up);
+        // Must be non-passive to call preventDefault on touchmove
+        const startY = e.touches?.[0]?.clientY ?? e.clientY;
+        const startH = mapH;
+        const vh = window.innerHeight / 100;
+
+        const move = me => {
+            if (me.cancelable) me.preventDefault(); // stop page scroll while dragging
+            const y = me.touches?.[0]?.clientY ?? me.clientY;
+            const newH = Math.max(15, Math.min(70, startH + (y - startY) / vh));
+            setMapH(newH);
+        };
+        const up = () => {
+            window.removeEventListener('mousemove', move);
+            window.removeEventListener('mouseup', up);
+            window.removeEventListener('touchmove', move);
+            window.removeEventListener('touchend', up);
+        };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up);
+        // {passive:false} is critical — allows preventDefault inside touchmove
+        window.addEventListener('touchmove', move, {passive: false});
+        window.addEventListener('touchend', up);
     },[mapH]);
+
+    const snapMapH = useCallback((vh) => setMapH(vh), []);
 
     if (loading) return (
         <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16,background:'var(--bg)'}}>
@@ -1406,78 +1439,85 @@ const App = () => {
                     </div>
                 )}
 
-                <div style={{display:'flex',gap:8,alignItems:'center',minWidth:120,justifyContent:'flex-end'}}>
+                <div style={{display:'flex',gap:8,alignItems:'center',minWidth:isMobile?'auto':120,justifyContent:'flex-end'}}>
                     {!isMobile && (
                         <div className="view-toggle" style={{visibility: mainTab==='map' ? 'visible' : 'hidden'}}>
                             <button className={`view-btn ${viewMode==='itinerary'?'active':''}`} onClick={()=>setViewMode('itinerary')}><Icon name="list" size={13}/>單日</button>
                             <button className={`view-btn ${viewMode==='route'?'active':''}`} onClick={()=>setViewMode('route')}><Icon name="route" size={13}/>路線</button>
                         </div>
                     )}
-                    <div style={{visibility: mainTab==='map' ? 'visible' : 'hidden'}}>
-                        <button onClick={()=>{setEditing(null);setModalOpen(true);}} className="btn-primary" style={{padding:'7px 16px',fontSize:13}}>
+                    {(mainTab==='map' || mainTab==='itinerary') && (
+                        <button onClick={()=>{setEditing(null);setModalOpen(true);}} className="btn-primary" style={{padding:'7px 14px',fontSize:13}}>
                             <Icon name="plus" size={15} color="white"/>新增
                         </button>
-                    </div>
+                    )}
                 </div>
             </header>
 
             {/* ── BODY ── */}
-            {mainTab==='map' ? (
-                isMobile ? (
-                    <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minHeight:0}}>
-                        {/* Mobile map-view sub-header */}
-                        <div style={{background:'white',borderBottom:'1px solid var(--border)',padding:'8px 12px',display:'flex',gap:6,alignItems:'center'}}>
+            {isMobile ? (
+                /* ── MOBILE: 3 獨立全螢幕分頁 ── */
+                <>
+                    {/* 地圖頁 */}
+                    <div style={{flex:1,display:mainTab==='map'?'flex':'none',flexDirection:'column',overflow:'hidden',minHeight:0,isolation:'isolate',paddingBottom:'calc(var(--nav-h) + var(--safe-bottom))'}}>
+                        <MapArea itinerary={itinerary} viewMode="route" activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={true} mapH={100}/>
+                    </div>
+
+                    {/* 行程頁 */}
+                    <div style={{flex:1,minHeight:0,display:mainTab==='itinerary'?'flex':'none',flexDirection:'column',overflow:'hidden'}}>
+                        {/* sub-tab: 單日 / 路線 */}
+                        <div style={{background:'white',borderBottom:'1px solid var(--border)',padding:'8px 12px',display:'flex',gap:6,alignItems:'center',flexShrink:0}}>
                             <div className="view-toggle" style={{background:'var(--bg)'}}>
                                 <button className={`view-btn ${viewMode==='itinerary'?'active':''}`} onClick={()=>setViewMode('itinerary')} style={{color:viewMode==='itinerary'?'var(--text)':'var(--text-muted)'}}><Icon name="list" size={13}/>單日</button>
                                 <button className={`view-btn ${viewMode==='route'?'active':''}`} onClick={()=>setViewMode('route')} style={{color:viewMode==='route'?'var(--text)':'var(--text-muted)'}}><Icon name="route" size={13}/>路線</button>
                             </div>
                         </div>
-                        <MapArea itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={true} mapH={mapH}/>
-                        <div className="resize-handle" onMouseDown={handleResizeStart} onTouchStart={handleResizeStart}/>
-                        <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                            <ItinerarySidebar itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} setActiveDay={setActiveDay} routeDays={routeDays} toggleRouteDay={d=>setRouteDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d].sort())} onEdit={item=>{setEditing(item);setModalOpen(true);}} onDelete={deleteItem} onShift={handleShift} onDragDrop={handleDragDrop} onFocus={setFocus} metrics={metrics} showToast={showToast}/>
-                        </div>
+                        <ItinerarySidebar itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} setActiveDay={setActiveDay} routeDays={routeDays} toggleRouteDay={d=>setRouteDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d].sort())} onEdit={item=>{setEditing(item);setModalOpen(true);}} onDelete={deleteItem} onShift={handleShift} onDragDrop={handleDragDrop} onFocus={item=>{setFocus(item);setMainTab('map');}} metrics={metrics} showToast={showToast}/>
                     </div>
-                ) : (
+
+                    {/* 費用頁 */}
+                    <div style={{flex:1,minHeight:0,display:mainTab==='expense'?'flex':'none',flexDirection:'column',overflow:'hidden',background:'var(--surface2)'}}>
+                        <ExpenseTab expenses={expenses} saveExpense={saveExpense} deleteExpense={deleteExpense} showToast={showToast}/>
+                    </div>
+                </>
+            ) : (
+                /* ── DESKTOP LAYOUT ── */
+                mainTab === 'map' ? (
                     <div style={{flex:1,display:'flex',flexDirection:'row',overflow:'hidden',minHeight:0}}>
                         <div style={{width:'var(--sidebar-w)',flexShrink:0,display:'flex',flexDirection:'column',borderRight:'1px solid var(--border)',overflow:'hidden'}}>
                             <ItinerarySidebar itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} setActiveDay={setActiveDay} routeDays={routeDays} toggleRouteDay={d=>setRouteDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d].sort())} onEdit={item=>{setEditing(item);setModalOpen(true);}} onDelete={deleteItem} onShift={handleShift} onDragDrop={handleDragDrop} onFocus={setFocus} metrics={metrics} showToast={showToast}/>
                         </div>
                         <MapArea itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={false} mapH={mapH}/>
                     </div>
-                )
-            ) : (
-                /* EXPENSE TAB (desktop) */
-                <div style={{flex:1,display:'flex',flexDirection:'row',overflow:'hidden',minHeight:0}}>
-                    <div style={{width:'var(--sidebar-w)',flexShrink:0,borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                        <ExpenseTab expenses={expenses} saveExpense={saveExpense} deleteExpense={deleteExpense} showToast={showToast}/>
+                ) : (
+                    <div style={{flex:1,display:'flex',flexDirection:'row',overflow:'hidden',minHeight:0}}>
+                        <div style={{width:'var(--sidebar-w)',flexShrink:0,borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                            <ExpenseTab expenses={expenses} saveExpense={saveExpense} deleteExpense={deleteExpense} showToast={showToast}/>
+                        </div>
+                        <MapArea itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={false} mapH={mapH}/>
                     </div>
-                    {/* Keep map visible on desktop expense view */}
-                    <MapArea itinerary={itinerary} viewMode={viewMode} activeDay={activeDay} routeDays={routeDays} focusTarget={focus} onMetrics={setMetrics} isMobile={false} mapH={mapH}/>
-                </div>
+                )
             )}
 
             {/* ── MOBILE BOTTOM NAV ── */}
             <nav className="bottom-nav">
                 <button className={`nav-tab ${mainTab==='map'?'active':''}`} onClick={()=>setMainTab('map')}>
-                    <Icon name="map" size={20} color={mainTab==='map'?'var(--accent)':'var(--text-faint)'}/>地圖行程
+                    <Icon name="map" size={20} color={mainTab==='map'?'var(--accent)':'var(--text-faint)'}/>
+                    地圖
                 </button>
-                <button className={`nav-tab ${mainTab==='expense'?'active':''}`} onClick={()=>setMainTab('expense')}>
+                <button className={`nav-tab ${mainTab==='itinerary'?'active':''}`} onClick={()=>setMainTab('itinerary')}>
+                    <Icon name="calendar" size={20} color={mainTab==='itinerary'?'var(--accent)':'var(--text-faint)'}/>
+                    行程
+                </button>
+                <button className={`nav-tab ${mainTab==='expense'?'active':''}`} onClick={()=>setMainTab('expense')} style={{position:'relative'}}>
                     <Icon name="wallet" size={20} color={mainTab==='expense'?'var(--accent)':'var(--text-faint)'}/>
-                    費用結算
-                    {totalExpense>0&&<span style={{position:'absolute',top:6,right:18,background:'var(--accent)',color:'white',borderRadius:99,padding:'1px 5px',fontSize:9,fontWeight:900}}>{expenses.length}</span>}
+                    費用
+                    {totalExpense>0&&<span style={{position:'absolute',top:4,right:8,background:'var(--accent)',color:'white',borderRadius:99,padding:'1px 5px',fontSize:9,fontWeight:900,lineHeight:'14px'}}>{expenses.length}</span>}
                 </button>
             </nav>
 
-            {/* Mobile expense full-screen */}
-            {isMobile && mainTab==='expense' && (
-                <div style={{position:'fixed',inset:0,top:'var(--header-h)',bottom:'calc(var(--nav-h) + var(--safe-bottom))',zIndex:150,display:'flex',flexDirection:'column',background:'var(--surface2)'}}>
-                    <ExpenseTab expenses={expenses} saveExpense={saveExpense} deleteExpense={deleteExpense} showToast={showToast}/>
-                </div>
-            )}
-
             {/* Mobile FAB */}
-            {mainTab==='map'&&<button className="fab" onClick={()=>{setEditing(null);setModalOpen(true);}}><Icon name="plus" size={22} color="white"/></button>}
+            {(mainTab==='map'||mainTab==='itinerary')&&<button className="fab" onClick={()=>{setEditing(null);setModalOpen(true);}}><Icon name="plus" size={22} color="white"/></button>}
 
             <ItemModal open={modalOpen} editing={editing} onClose={()=>{setModalOpen(false);setEditing(null);}} onSave={handleSave} activeDay={activeDay}/>
         </div>
